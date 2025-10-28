@@ -244,58 +244,40 @@ export function NavigationBar({
       }
     >
       <div className="mx-auto flex h-full w-full max-w-screen-2xl items-center justify-between py-3">
-        {/* Application logo/title with link to home */}
-        <Link to="/">
-          <h1 className="text-lg font-extrabold">{t("home.title")}</h1>
-        </Link>
+        {/* Left: Application logo/title with link to home */}
+        <div className="flex-1">
+          <Link to="/">
+            <h1 className="text-lg font-extrabold">{t("home.title")}</h1>
+          </Link>
+        </div>
 
-        {/* Desktop navigation menu (hidden on mobile) */}
-        <div className="hidden h-full items-center gap-5 md:flex">
-          {/* Main navigation links */}
-          {/* <Link
+        {/* Center: Main navigation links (hidden on mobile) */}
+        <div className="hidden h-full flex-1 items-center justify-center gap-8 md:flex">
+          <Link
             to="/work/business-logic"
             viewTransition
             className="text-muted-foreground hover:text-foreground text-sm transition-colors"
           >
-            업무 관리
+            제품
           </Link>
           <Link
             to="/work/upload"
             viewTransition
             className="text-muted-foreground hover:text-foreground text-sm transition-colors"
           >
-            업로드 센터
+            가격
           </Link>
           <Link
             to="/work/team-management"
             viewTransition
             className="text-muted-foreground hover:text-foreground text-sm transition-colors"
           >
-            팀원 관리
-          </Link> */}
-          {/* <Link
-            to="/blog"
-            viewTransition
-            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
-          >
-            Blog
+            체험
           </Link>
-          <Link
-            to="/contact"
-            viewTransition
-            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
-          >
-            Contact
-          </Link>
-          <Link
-            to="/payments/checkout"
-            viewTransition
-            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
-          >
-            Payments
-          </Link>
-           */}
-          <Separator orientation="vertical" />
+        </div>
+
+        {/* Right: Settings, theme, language, and user menu (hidden on mobile) */}
+        <div className="hidden h-full flex-1 items-center justify-end gap-5 md:flex">
           {/* Settings, theme switcher, and language switcher */}
           <Actions />
           <Separator orientation="vertical" />
