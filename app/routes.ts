@@ -40,8 +40,6 @@ export default [
         "features/users/api/disconnect-provider.tsx",
       ),
     ]),
-    ...prefix("/cron", [route("/mailer", "features/cron/api/mailer.tsx")]),
-    ...prefix("/blog", [route("/og", "features/blog/api/og.tsx")]),
   ]),
 
   layout("features/work/layouts/work.layout.tsx", [
@@ -112,10 +110,4 @@ export default [
   ]),
 
   ...prefix("/legal", [route("/:slug", "features/legal/screens/policy.tsx")]),
-  layout("features/blog/layouts/blog.layout.tsx", [
-    ...prefix("/blog", [
-      index("features/blog/screens/posts.tsx"),
-      route("/:slug", "features/blog/screens/post.tsx"),
-    ]),
-  ]),
 ] satisfies RouteConfig;

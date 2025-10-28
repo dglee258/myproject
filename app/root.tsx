@@ -140,7 +140,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
  * This component handles the HTML structure of the application and applies:
  * - Language direction (RTL/LTR) based on the current locale
  * - Theme class to the HTML element
- * - Special handling for pre-rendered routes (blog, legal pages)
+ * - Special handling for pre-rendered routes (legal pages)
  * - Loading of analytics and customer support scripts
  *
  * @param children - Child components to render within the layout
@@ -154,10 +154,9 @@ function InnerLayout({ children }: { children: React.ReactNode }) {
   // Set the i18next language based on the locale from the loader
   useChangeLanguage(data?.locale ?? "en");
 
-  // Detect if the current route is a pre-rendered page (blog or legal)
+  // Detect if the current route is a pre-rendered page (legal)
   // These pages require special theme handling
-  const isPreRendered =
-    pathname.includes("/legal") || pathname.includes("/blog");
+  const isPreRendered = pathname.includes("/legal");
 
   return (
     <html
