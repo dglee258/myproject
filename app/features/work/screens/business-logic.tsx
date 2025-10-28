@@ -22,10 +22,10 @@ import { Card } from "~/core/components/ui/card";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "업무로직 자동 생성" },
+    { title: "업무로직 " },
     {
       name: "description",
-      content: "화면 녹화 동영상을 AI로 분석하여 업무 로직을 자동 생성합니다",
+      content: "동영상을 AI로 분석하여 업무 로직 자동 생성",
     },
   ];
 }
@@ -239,10 +239,9 @@ export default function BusinessLogic() {
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="mb-2 text-3xl font-bold">업무로직 자동 생성</h1>
+            <h1 className="mb-2 text-3xl font-bold">업무로직</h1>
             <p className="text-muted-foreground">
-              화면 녹화 동영상을 AI가 분석하여 업무 프로세스를 자동으로
-              문서화합니다
+              동영상을 AI가 분석하여 업무 프로세스 자동 생성
             </p>
           </div>
           <Link to="/work/upload">
@@ -346,9 +345,9 @@ export default function BusinessLogic() {
                       <Sparkles className="text-primary size-5" />
                       추출된 업무 로직
                     </h3>
-                    <Button variant="outline" size="sm">
+                    {/* <Button variant="outline" size="sm">
                       순서도로 보기
-                    </Button>
+                    </Button> */}
                   </div>
 
                   <div className="relative space-y-3">
