@@ -44,6 +44,7 @@ export default [
 
   layout("features/work/layouts/work.layout.tsx", [
     ...prefix("/work", [
+      index("features/work/screens/index.tsx"),
       route("/business-logic", "features/work/screens/business-logic.tsx"),
       route("/upload", "features/work/screens/upload.tsx"),
       route("/team-management", "features/work/screens/team-management.tsx"),
