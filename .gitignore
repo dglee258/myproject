@@ -4,6 +4,7 @@
 /.react-router/
 /build/
 .env
+Check_LIst.md
 
 # Playwright
 node_modules/
