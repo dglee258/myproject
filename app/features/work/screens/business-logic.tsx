@@ -54,7 +54,7 @@ const mockVideos: VideoAnalysis[] = [
     id: "1",
     title: "고객 주문 처리 프로세스",
     duration: "5:23",
-    uploadDate: "2024-10-28",
+    uploadDate: "2025-10-28",
     status: "analyzed",
     thumbnail: "/placeholder-video.jpg",
     steps: [
@@ -234,18 +234,18 @@ export default function BusinessLogic() {
   };
 
   return (
-    <div className="container mx-auto max-w-7xl p-6">
+    <div className="container mx-auto max-w-7xl p-4 sm:p-6">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="mb-2 text-3xl font-bold">업무로직</h1>
-            <p className="text-muted-foreground">
+            <h1 className="mb-2 text-2xl font-bold sm:text-3xl">업무로직</h1>
+            <p className="text-sm text-muted-foreground sm:text-base">
               동영상을 AI가 분석하여 업무 프로세스 자동 생성
             </p>
           </div>
-          <Link to="/work/upload">
-            <Button size="lg">
+          <Link to="/work/upload" className="sm:shrink-0">
+            <Button size="lg" className="w-full sm:w-auto">
               <Plus className="mr-2 size-4" />
               업로드
             </Button>
@@ -253,9 +253,9 @@ export default function BusinessLogic() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Video List Sidebar */}
-        <div className="lg:col-span-1">
+        <div className="md:col-span-2 lg:col-span-1">
           <Card className="p-4">
             <h2 className="mb-4 text-lg font-semibold">분석된 동영상</h2>
             <div className="space-y-3">
@@ -307,16 +307,16 @@ export default function BusinessLogic() {
         </div>
 
         {/* Main Content - Logic Flow */}
-        <div className="lg:col-span-2">
+        <div className="md:col-span-2 lg:col-span-2">
           {selectedVideo ? (
             <Card className="p-6">
               {/* Video Header */}
-              <div className="mb-6 flex items-start justify-between">
-                <div>
-                  <h2 className="mb-2 text-2xl font-bold">
+              <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex-1">
+                  <h2 className="mb-2 text-xl font-bold sm:text-2xl">
                     {selectedVideo.title}
                   </h2>
-                  <div className="text-muted-foreground flex items-center gap-4 text-sm">
+                  <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm sm:gap-4">
                     <span className="flex items-center gap-1">
                       <Clock className="size-4" />
                       {selectedVideo.duration}
@@ -331,7 +331,7 @@ export default function BusinessLogic() {
                     </Badge>
                   </div>
                 </div>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="w-full sm:w-auto sm:shrink-0">
                   <Play className="mr-2 size-4" />
                   동영상 재생
                 </Button>
@@ -443,8 +443,8 @@ export default function BusinessLogic() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="mt-6 flex gap-3">
-                    <Button variant="outline">수정</Button>
+                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                    <Button variant="outline" className="w-full sm:w-auto">수정</Button>
                   </div>
                 </div>
               ) : (
