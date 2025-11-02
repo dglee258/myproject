@@ -7,18 +7,34 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Edit,
   FileVideo,
   Lightbulb,
   Play,
   Plus,
+  Save,
   Sparkles,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
+import { toast } from "sonner";
 
 import { Badge } from "~/core/components/ui/badge";
+import { BorderBeam } from "~/core/components/ui/border-beam";
 import { Button } from "~/core/components/ui/button";
 import { Card } from "~/core/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/core/components/ui/dialog";
+import { Label } from "~/core/components/ui/label";
+import { ShineBorder } from "~/core/components/ui/shine-border";
+import { Textarea } from "~/core/components/ui/textarea";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -47,6 +63,7 @@ interface LogicStep {
   timestamp: string;
   confidence: number;
   type: "click" | "input" | "navigate" | "wait" | "decision";
+  notes?: string; // 추가 설명
 }
 
 const mockVideos: VideoAnalysis[] = [
@@ -189,7 +206,11 @@ export default function BusinessLogic() {
   const [selectedVideo, setSelectedVideo] = useState<VideoAnalysis | null>(
     mockVideos[0],
   );
-  const [expandedSteps, setExpandedSteps] = useState<number[]>([]);
+  const [expandedSteps, setExpandedSteps] = useState<number[]>([]); // 버튼 클릭으로 고정된 단계
+  const [hoveredStep, setHoveredStep] = useState<number | null>(null); // hover 상태 단계
+  const [editingStep, setEditingStep] = useState<LogicStep | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editNotes, setEditNotes] = useState("");
 
   const toggleStep = (stepId: number) => {
     setExpandedSteps((prev) =>
@@ -197,6 +218,31 @@ export default function BusinessLogic() {
         ? prev.filter((id) => id !== stepId)
         : [...prev, stepId],
     );
+  };
+
+  // 단계가 열려있는지 확인 (hover 또는 고정)
+  const isStepOpen = (stepId: number) => {
+    return expandedSteps.includes(stepId) || hoveredStep === stepId;
+  };
+
+  const openEditDialog = (step: LogicStep) => {
+    setEditingStep(step);
+    setEditNotes(step.notes || "");
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveNotes = () => {
+    if (!selectedVideo || !editingStep) return;
+
+    const updatedSteps = selectedVideo.steps.map((step) =>
+      step.id === editingStep.id ? { ...step, notes: editNotes } : step,
+    );
+
+    setSelectedVideo({ ...selectedVideo, steps: updatedSteps });
+    setIsEditDialogOpen(false);
+    setEditingStep(null);
+    setEditNotes("");
+    toast.success("설명이 추가되었습니다");
   };
 
   const getStepIcon = (type: LogicStep["type"]) => {
@@ -350,26 +396,35 @@ export default function BusinessLogic() {
                     </Button> */}
                   </div>
 
-                  <div className="relative space-y-3">
+                  <div className="relative space-y-8">
                     {selectedVideo.steps.map((step, index) => (
                       <div key={step.id} className="relative">
-                        {/* Connector Line */}
-                        {index < selectedVideo.steps.length - 1 && (
-                          <div className="bg-border absolute top-16 left-6 h-8 w-0.5" />
-                        )}
-
                         {/* Step Card */}
                         <div
-                          className={`rounded-lg border transition-all ${
-                            expandedSteps.includes(step.id)
-                              ? "border-primary bg-primary/5"
-                              : "border-border bg-card hover:border-primary/50"
+                          onMouseEnter={() => setHoveredStep(step.id)}
+                          onMouseLeave={() => setHoveredStep(null)}
+                          onClick={() => toggleStep(step.id)}
+                          className={`group relative cursor-pointer rounded-lg border transition-all duration-300 ${
+                            isStepOpen(step.id)
+                              ? "border-primary bg-primary/5 shadow-lg shadow-primary/20"
+                              : "border-border bg-card hover:border-primary/50 hover:shadow-md"
                           }`}
                         >
-                          <button
-                            onClick={() => toggleStep(step.id)}
-                            className="w-full p-4 text-left"
-                          >
+                          {/* Magic UI: Border Beam - hover 시 테두리 빔 효과 */}
+                          {hoveredStep === step.id && !expandedSteps.includes(step.id) && (
+                            <BorderBeam size={200} duration={8} delay={0} />
+                          )}
+                          
+                          {/* Magic UI: Shine Border - 고정된 카드에 빛나는 효과 */}
+                          {expandedSteps.includes(step.id) && (
+                            <ShineBorder
+                              borderWidth={3}
+                              duration={3}
+                              shineColor={["#a78bfa", "#818cf8", "#6366f1", "#8b5cf6"]}
+                            />
+                          )}
+                          
+                          <div className="p-4 transition-transform duration-300 group-hover:scale-[1.01]">
                             <div className="flex items-start gap-4">
                               {/* Step Number */}
                               <div className="bg-primary text-primary-foreground flex size-12 shrink-0 items-center justify-center rounded-full text-lg font-bold">
@@ -387,11 +442,19 @@ export default function BusinessLogic() {
                                       {step.action}
                                     </h4>
                                   </div>
-                                  {expandedSteps.includes(step.id) ? (
-                                    <ChevronDown className="text-muted-foreground size-5" />
-                                  ) : (
-                                    <ChevronRight className="text-muted-foreground size-5" />
-                                  )}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleStep(step.id);
+                                    }}
+                                    className="text-muted-foreground hover:text-foreground transition-colors"
+                                  >
+                                    {expandedSteps.includes(step.id) ? (
+                                      <ChevronDown className="size-5" />
+                                    ) : (
+                                      <ChevronRight className="size-5" />
+                                    )}
+                                  </button>
                                 </div>
 
                                 <div className="flex items-center gap-3">
@@ -411,32 +474,71 @@ export default function BusinessLogic() {
                                 </div>
 
                                 {/* Expanded Details */}
-                                {expandedSteps.includes(step.id) && (
-                                  <div className="bg-muted/50 mt-3 rounded-lg p-3">
-                                    <p className="text-muted-foreground text-sm">
-                                      {step.description}
-                                    </p>
-                                    {step.type === "decision" && (
-                                      <div className="mt-3 flex gap-2">
-                                        <Badge
-                                          variant="outline"
-                                          className="text-green-600"
-                                        >
-                                          ✓ 조건 충족 시
-                                        </Badge>
-                                        <Badge
-                                          variant="outline"
-                                          className="text-red-600"
-                                        >
-                                          ✗ 조건 미충족 시
-                                        </Badge>
+                                {isStepOpen(step.id) && (
+                                  <div className="mt-3 space-y-3">
+                                    <div className="bg-muted/50 rounded-lg p-3">
+                                      <p className="text-muted-foreground text-sm">
+                                        {step.description}
+                                      </p>
+                                      {step.type === "decision" && (
+                                        <div className="mt-3 flex gap-2">
+                                          <Badge
+                                            variant="outline"
+                                            className="text-green-600"
+                                          >
+                                            ✓ 조건 충족 시
+                                          </Badge>
+                                          <Badge
+                                            variant="outline"
+                                            className="text-red-600"
+                                          >
+                                            ✗ 조건 미충족 시
+                                          </Badge>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* 추가 설명 섹션 */}
+                                    {step.notes ? (
+                                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950">
+                                        <div className="mb-2 flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <Lightbulb className="size-4 text-blue-600 dark:text-blue-400" />
+                                            <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                                              추가 설명
+                                            </span>
+                                          </div>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => openEditDialog(step)}
+                                          >
+                                            <Edit className="size-3" />
+                                          </Button>
+                                        </div>
+                                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                                          {step.notes}
+                                        </p>
                                       </div>
+                                    ) : (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openEditDialog(step);
+                                        }}
+                                        className="w-full"
+                                      >
+                                        <Plus className="mr-2 size-4" />
+                                        추가 설명 작성
+                                      </Button>
                                     )}
                                   </div>
                                 )}
                               </div>
                             </div>
-                          </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -478,6 +580,51 @@ export default function BusinessLogic() {
           )}
         </div>
       </div>
+
+      {/* 추가 설명 편집 다이얼로그 */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>추가 설명 작성</DialogTitle>
+            <DialogDescription>
+              {editingStep?.action}에 대한 추가 설명을 작성하세요.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="notes">설명 내용</Label>
+              <Textarea
+                id="notes"
+                placeholder="이 단계에 대한 추가 설명, 주의사항, 팁 등을 작성하세요..."
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                rows={6}
+                className="resize-none"
+              />
+              <p className="text-muted-foreground text-xs">
+                업무 프로세스를 더 명확하게 이해할 수 있도록 상세한 설명을 추가하세요.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsEditDialogOpen(false);
+                setEditingStep(null);
+                setEditNotes("");
+              }}
+            >
+              <X className="mr-2 size-4" />
+              취소
+            </Button>
+            <Button onClick={handleSaveNotes}>
+              <Save className="mr-2 size-4" />
+              저장
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
