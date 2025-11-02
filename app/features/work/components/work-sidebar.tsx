@@ -56,8 +56,8 @@ export default function WorkSidebar(
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-2">
-          <SidebarTrigger className="-ml-1" />
+        <div className="flex items-center gap-2 px-2 py-4">
+          <SidebarTrigger className="-ml-1 hidden lg:flex" />
           <h2 className="text-lg font-semibold group-data-[collapsible=icon]:hidden">업무 관리</h2>
         </div>
       </SidebarHeader>
