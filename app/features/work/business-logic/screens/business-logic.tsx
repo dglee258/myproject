@@ -38,10 +38,10 @@ import { Textarea } from "~/core/components/ui/textarea";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "업무로직 " },
+    { title: "업무프로세스 " },
     {
       name: "description",
-      content: "동영상을 AI로 분석하여 업무 로직 자동 생성",
+      content: "동영상을 AI로 분석하여 업무 프로세스 자동 생성",
     },
   ];
 }
@@ -285,15 +285,17 @@ export default function BusinessLogic() {
       <div className="mb-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="mb-2 text-2xl font-bold sm:text-3xl">업무로직</h1>
-            <p className="text-sm text-muted-foreground sm:text-base">
-              동영상을 AI가 분석하여 업무 프로세스 자동 생성
+            <h1 className="mb-2 text-2xl font-bold sm:text-3xl">
+              업무 프로세스
+            </h1>
+            <p className="text-muted-foreground text-sm sm:text-base">
+              업무 동영상을 업로드하면 AI가 자동으로 프로세스를 분석해드려요
             </p>
           </div>
           <Link to="/work/upload" className="sm:shrink-0">
             <Button size="lg" className="w-full sm:w-auto">
               <Plus className="mr-2 size-4" />
-              업로드
+              동영상 업로드
             </Button>
           </Link>
         </div>
@@ -303,7 +305,10 @@ export default function BusinessLogic() {
         {/* Video List Sidebar */}
         <div className="md:col-span-2 lg:col-span-1">
           <Card className="p-4">
-            <h2 className="mb-4 text-lg font-semibold">분석된 동영상</h2>
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+              <FileVideo className="size-5" />
+              업무 목록
+            </h2>
             <div className="space-y-3">
               {mockVideos.map((video) => (
                 <button
@@ -337,10 +342,10 @@ export default function BusinessLogic() {
                       className="text-xs"
                     >
                       {video.status === "analyzed"
-                        ? "분석 완료"
+                        ? "✅ 분석 완료"
                         : video.status === "analyzing"
-                          ? "분석 중"
-                          : "대기 중"}
+                          ? "⏳ 분석 중"
+                          : "⏸️ 대기 중"}
                     </Badge>
                     <span className="text-muted-foreground text-xs">
                       {video.uploadDate}
@@ -372,14 +377,18 @@ export default function BusinessLogic() {
                       variant="outline"
                       className="flex items-center gap-1"
                     >
-                      <Bot className="size-3" />
+                      <CheckCircle2 className="size-3" />
                       AI 분석 완료
                     </Badge>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="w-full sm:w-auto sm:shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:w-auto sm:shrink-0"
+                >
                   <Play className="mr-2 size-4" />
-                  동영상 재생
+                  원본 동영상 보기
                 </Button>
               </div>
 
@@ -389,8 +398,11 @@ export default function BusinessLogic() {
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="flex items-center gap-2 text-lg font-semibold">
                       <Sparkles className="text-primary size-5" />
-                      추출된 업무 로직
+                      단계별 업무 프로세스
                     </h3>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      클릭하거나 마우스를 올려 상세 내용을 확인하세요
+                    </p>
                     {/* <Button variant="outline" size="sm">
                       순서도로 보기
                     </Button> */}
@@ -406,24 +418,30 @@ export default function BusinessLogic() {
                           onClick={() => toggleStep(step.id)}
                           className={`group relative cursor-pointer rounded-lg border transition-all duration-300 ${
                             isStepOpen(step.id)
-                              ? "border-primary bg-primary/5 shadow-lg shadow-primary/20"
+                              ? "border-primary bg-primary/5 shadow-primary/20 shadow-lg"
                               : "border-border bg-card hover:border-primary/50 hover:shadow-md"
                           }`}
                         >
                           {/* Magic UI: Border Beam - hover 시 테두리 빔 효과 */}
-                          {hoveredStep === step.id && !expandedSteps.includes(step.id) && (
-                            <BorderBeam size={200} duration={8} delay={0} />
-                          )}
-                          
+                          {hoveredStep === step.id &&
+                            !expandedSteps.includes(step.id) && (
+                              <BorderBeam size={200} duration={8} delay={0} />
+                            )}
+
                           {/* Magic UI: Shine Border - 고정된 카드에 빛나는 효과 */}
                           {expandedSteps.includes(step.id) && (
                             <ShineBorder
                               borderWidth={3}
                               duration={3}
-                              shineColor={["#a78bfa", "#818cf8", "#6366f1", "#8b5cf6"]}
+                              shineColor={[
+                                "#a78bfa",
+                                "#818cf8",
+                                "#6366f1",
+                                "#8b5cf6",
+                              ]}
                             />
                           )}
-                          
+
                           <div className="p-4 transition-transform duration-300 group-hover:scale-[1.01]">
                             <div className="flex items-start gap-4">
                               {/* Step Number */}
@@ -530,8 +548,8 @@ export default function BusinessLogic() {
                                         }}
                                         className="w-full"
                                       >
-                                        <Plus className="mr-2 size-4" />
-                                        추가 설명 작성
+                                        <Plus className="mr-2 size-4" />이
+                                        단계에 메모 추가하기
                                       </Button>
                                     )}
                                   </div>
@@ -545,35 +563,63 @@ export default function BusinessLogic() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                    <Button variant="outline" className="w-full sm:w-auto">수정</Button>
+                  <div className="border-primary/50 bg-primary/5 mt-8 rounded-lg border border-dashed p-4">
+                    <div className="flex items-start gap-3">
+                      <Lightbulb className="text-primary mt-0.5 size-5 shrink-0" />
+                      <div className="flex-1">
+                        <h4 className="mb-1 text-sm font-semibold">
+                          팁: 각 단계에 메모를 추가하면 팀원들이 업무를 더 쉽게
+                          이해할 수 있어요
+                        </h4>
+
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full sm:w-auto"
+                          >
+                            <Edit className="mr-2 size-3" />
+                            프로세스 수정하기
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Bot className="text-muted-foreground mb-4 size-16" />
+                  <div className="relative mb-4">
+                    <Bot className="text-primary size-16 animate-pulse" />
+                    <Sparkles className="text-primary absolute -top-1 -right-1 size-6 animate-bounce" />
+                  </div>
                   <h3 className="mb-2 text-lg font-semibold">
-                    AI 분석 진행 중...
+                    ✨ AI가 열심히 분석하고 있어요
                   </h3>
-                  <p className="text-muted-foreground text-sm">
-                    동영상을 분석하여 업무 로직을 추출하고 있습니다
+                  <p className="text-muted-foreground mb-1 text-sm">
+                    동영상에서 업무 프로세스를 추출하는 중이에요
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    잠시만 기다려주세요 (1-2분 소요)
                   </p>
                 </div>
               )}
             </Card>
           ) : (
             <Card className="flex flex-col items-center justify-center p-12 text-center">
-              <FileVideo className="text-muted-foreground mb-4 size-16" />
-              <h3 className="mb-2 text-lg font-semibold">
-                동영상을 선택하세요
+              <div className="bg-muted mb-4 rounded-full p-4">
+                <FileVideo className="text-muted-foreground size-16" />
+              </div>
+              <h3 className="mb-2 text-xl font-semibold">
+                👋 어떤 업무를 분석할까요?
               </h3>
-              <p className="text-muted-foreground mb-4 text-sm">
-                왼쪽 목록에서 분석된 동영상을 선택하여 업무 로직을 확인하세요
+              <p className="text-muted-foreground mb-6 max-w-md text-sm">
+                왼쪽에서 분석된 동영상을 선택하거나,
+                <br />
+                새로운 업무 동영상을 업로드해보세요
               </p>
               <Link to="/work/upload">
-                <Button>
-                  <Plus className="mr-2 size-4" />
-                  업로드
+                <Button size="lg">
+                  <Plus className="mr-2 size-4" />첨 번째 동영상 업로드하기
                 </Button>
               </Link>
             </Card>
@@ -585,25 +631,34 @@ export default function BusinessLogic() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>추가 설명 작성</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Lightbulb className="text-primary size-5" />
+              단계 메모 추가하기
+            </DialogTitle>
             <DialogDescription>
-              {editingStep?.action}에 대한 추가 설명을 작성하세요.
+              <span className="font-medium">{editingStep?.action}</span> 단계에
+              대한 메모를 작성해보세요.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="notes">설명 내용</Label>
+              <Label htmlFor="notes" className="text-sm font-medium">
+                메모 내용
+              </Label>
               <Textarea
                 id="notes"
-                placeholder="이 단계에 대한 추가 설명, 주의사항, 팁 등을 작성하세요..."
+                placeholder="예) 이 단계에서는 반드시 고객 정보를 확인해야 합니다. 주문 번호가 정확한지 다시 한번 체크 필요"
                 value={editNotes}
                 onChange={(e) => setEditNotes(e.target.value)}
                 rows={6}
                 className="resize-none"
               />
-              <p className="text-muted-foreground text-xs">
-                업무 프로세스를 더 명확하게 이해할 수 있도록 상세한 설명을 추가하세요.
-              </p>
+              <div className="bg-muted/50 rounded-md p-3">
+                <p className="text-muted-foreground flex items-start gap-2 text-xs">
+                  <Lightbulb className="mt-0.5 size-3 shrink-0" />
+                  <span>주의사항, 팁, 예외 상황 등을 작성해보세요.</span>
+                </p>
+              </div>
             </div>
           </div>
           <DialogFooter>

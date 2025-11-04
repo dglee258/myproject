@@ -45,9 +45,9 @@ export default [
   layout("features/work/layouts/work.layout.tsx", [
     ...prefix("/work", [
       index("features/work/screens/index.tsx"),
-      route("/business-logic", "features/work/screens/business-logic.tsx"),
-      route("/upload", "features/work/screens/upload.tsx"),
-      route("/team-management", "features/work/screens/team-management.tsx"),
+      route("/business-logic", "features/work/business-logic/screens/business-logic.tsx"),
+      route("/upload", "features/work/upload/screens/upload.tsx"),
+      route("/team-management", "features/work/team-management/screens/team-management.tsx"),
     ]),
   ]),
 
@@ -100,15 +100,10 @@ export default [
     ]),
   ]),
 
-  layout("core/layouts/private.layout.tsx", { id: "private-dashboard" }, [
-    layout("features/users/layouts/dashboard.layout.tsx", [
-      ...prefix("/dashboard", [
-        index("features/users/screens/dashboard.tsx"),
-        route("/payments", "features/payments/screens/payments.tsx"),
-      ]),
-      route("/account/edit", "features/users/screens/account.tsx"),
-    ]),
-  ]),
+  // 테스트용: Dashboard를 public으로 변경 (로그인 불필요)
+  route("/dashboard", "features/users/screens/dashboard.tsx"),
+
+
 
   ...prefix("/legal", [route("/:slug", "features/legal/screens/policy.tsx")]),
 ] satisfies RouteConfig;

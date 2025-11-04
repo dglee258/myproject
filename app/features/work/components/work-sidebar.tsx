@@ -8,7 +8,11 @@ import {
 } from "lucide-react";
 import { Link } from "react-router";
 
-import { Avatar, AvatarFallback, AvatarImage } from "~/core/components/ui/avatar";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "~/core/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,7 +38,7 @@ import {
 
 const navItems = [
   {
-    title: "업무로직",
+    title: "업무프로세스",
     url: "/work/business-logic",
     icon: BriefcaseIcon,
   },
@@ -51,14 +55,16 @@ const navItems = [
 ];
 
 export default function WorkSidebar(
-  props: React.ComponentProps<typeof Sidebar>
+  props: React.ComponentProps<typeof Sidebar>,
 ) {
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-4">
           <SidebarTrigger className="-ml-1 hidden lg:flex" />
-          <h2 className="text-lg font-semibold group-data-[collapsible=icon]:hidden">업무 관리</h2>
+          <h2 className="text-lg font-semibold group-data-[collapsible=icon]:hidden">
+            업무 관리
+          </h2>
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -90,8 +96,13 @@ export default function WorkSidebar(
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
                   <Avatar className="h-8 w-8 rounded-lg">
-                    <AvatarImage src="https://github.com/shadcn.png" alt="User" />
-                    <AvatarFallback className="rounded-lg">홍길동</AvatarFallback>
+                    <AvatarImage
+                      src="https://github.com/shadcn.png"
+                      alt="User"
+                    />
+                    <AvatarFallback className="rounded-lg">
+                      홍길동
+                    </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">홍길동</span>
@@ -109,8 +120,13 @@ export default function WorkSidebar(
                 <DropdownMenuLabel className="p-0 font-normal">
                   <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                     <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarImage src="https://github.com/shadcn.png" alt="User" />
-                      <AvatarFallback className="rounded-lg">홍길동</AvatarFallback>
+                      <AvatarImage
+                        src="https://github.com/shadcn.png"
+                        alt="User"
+                      />
+                      <AvatarFallback className="rounded-lg">
+                        홍길동
+                      </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold">홍길동</span>
