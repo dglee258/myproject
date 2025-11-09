@@ -8,7 +8,7 @@
  */
 import type { Route } from "./+types/login";
 
-import { AlertCircle, Loader2Icon } from "lucide-react";
+import { AlertCircle, Loader2Icon, Play } from "lucide-react";
 import { useRef } from "react";
 import { Form, Link, data, redirect, useFetcher } from "react-router";
 import { z } from "zod";
@@ -91,21 +91,18 @@ export async function action({ request }: Route.ActionArgs) {
     return data({ fieldErrors: error.flatten().fieldErrors }, { status: 400 });
   }
 
-  // Create Supabase client with request cookies for authentication
+  // Supabase 인증 복원
   const [client, headers] = makeServerClient(request);
-
-  // Attempt to sign in with email and password
   const { error: signInError } = await client.auth.signInWithPassword({
     ...validData,
   });
-
-  // Return error if authentication fails
+  
   if (signInError) {
     return data({ error: signInError.message }, { status: 400 });
   }
-
-  // Redirect to home page with authentication cookies in headers
-  return redirect("/", { headers });
+  
+  // 로그인 성공 후 /work로 리다이렉트
+  return redirect("/work", { headers });
 }
 
 /**
@@ -177,7 +174,7 @@ export default function Login({ actionData }: Route.ComponentProps) {
                 name="email"
                 required
                 type="email"
-                placeholder="i.e nico@supaplate.com"
+                placeholder="test1234@test.com"
               />
               {actionData &&
               "fieldErrors" in actionData &&
@@ -240,14 +237,14 @@ export default function Login({ actionData }: Route.ComponentProps) {
                   </AlertDescription>
                 </Alert>
               ) : (
-                <FormErrors errors={[actionData.error]} />
+                <FormErrors errors={[String(actionData.error)]} />
               )
             ) : null}
           </Form>
           <SignInButtons />
         </CardContent>
       </Card>
-      <div className="flex flex-col items-center justify-center text-sm">
+      <div className="flex flex-col items-center justify-center gap-3 text-sm">
         <p className="text-muted-foreground">
           Don't have an account?{" "}
           <Link
@@ -259,6 +256,18 @@ export default function Login({ actionData }: Route.ComponentProps) {
             Sign up
           </Link>
         </p>
+        <div className="flex items-center gap-2 rounded-lg border border-dashed border-blue-200 bg-blue-50/50 px-4 py-2 dark:border-blue-900 dark:bg-blue-950/20">
+          <Play className="size-4 text-blue-600 dark:text-blue-400" />
+          <p className="text-muted-foreground">
+            <Link
+              to="/demo"
+              viewTransition
+              className="text-blue-600 hover:text-blue-700 font-medium underline transition-colors dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              로그인 없이 데모 체험하기
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

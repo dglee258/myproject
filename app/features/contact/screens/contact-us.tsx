@@ -269,10 +269,13 @@ export default function ContactUs({ actionData }: Route.ComponentProps) {
    * 4. Resetting the form on successful submission
    */
   useEffect(() => {
-    if (!actionData) return;
+    if (!actionData || !renderCaptchas) return;
     
     // Reset both CAPTCHA widgets and their tokens
-    turnstile.reset();
+    // Check if turnstile is available before calling reset
+    if (turnstile?.reset) {
+      turnstile.reset();
+    }
     hcaptchaRef.current?.resetCaptcha();
     setHcaptchaToken("");
     setTurnstileToken("");
@@ -292,7 +295,7 @@ export default function ContactUs({ actionData }: Route.ComponentProps) {
     else if ("error" in actionData && actionData.error) {
       toast.error(actionData.error.message);
     }
-  }, [actionData]);
+  }, [actionData, renderCaptchas, turnstile]);
   
   /**
    * Effect for delayed rendering of CAPTCHA widgets

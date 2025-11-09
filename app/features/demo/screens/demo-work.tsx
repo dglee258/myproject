@@ -1,9 +1,7 @@
-import type { Route } from "./+types/business-logic";
-
-import makeServerClient from "~/core/lib/supa-client.server";
-import { getUserWorkflows } from "../queries.server";
+import type { Route } from "./+types/demo-work";
 
 import {
+  AlertCircle,
   ArrowRight,
   Bot,
   CheckCircle2,
@@ -14,19 +12,17 @@ import {
   FileVideo,
   Lightbulb,
   Loader2,
-  Maximize,
-  Pause,
-  Play,
+  LogIn,
   Plus,
   Save,
   Sparkles,
-  Volume2,
   X,
 } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
-import { Link, useFetcher, useRevalidator, data } from "react-router";
+import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { toast } from "sonner";
 
+import { Alert, AlertDescription, AlertTitle } from "~/core/components/ui/alert";
 import { Badge } from "~/core/components/ui/badge";
 import { BorderBeam } from "~/core/components/ui/border-beam";
 import { Button } from "~/core/components/ui/button";
@@ -45,61 +41,19 @@ import { Textarea } from "~/core/components/ui/textarea";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "업무프로세스 " },
+    { title: "업무프로세스 데모 - 체험하기" },
     {
       name: "description",
-      content: "동영상을 AI로 분석하여 업무 프로세스 자동 생성",
+      content: "로그인 없이 AI 업무 프로세스 분석 기능을 체험해보세요",
     },
   ];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const [client] = makeServerClient(request);
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-
-  if (!user) {
-    throw new Response("Unauthorized", { status: 401 });
-  }
-
-  const workflows = await getUserWorkflows(user.id);
-  
-  return { workflows };
-}
-
-// 메모 저장 action
-export async function action({ request }: Route.ActionArgs) {
-  const [client] = makeServerClient(request);
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-
-  if (!user) {
-    return data({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  try {
-    const formData = await request.formData();
-    const stepId = parseInt(formData.get("stepId") as string);
-    const notes = formData.get("notes") as string;
-
-    if (isNaN(stepId)) {
-      return data({ error: "Invalid step ID" }, { status: 400 });
-    }
-
-    // DB 업데이트
-    const { updateStepNotes } = await import("../queries.server");
-    await updateStepNotes(stepId, notes || "");
-
-    return data({ success: true, message: "메모가 저장되었습니다" });
-  } catch (error) {
-    console.error("Update notes error:", error);
-    return data(
-      { error: "Failed to update notes" },
-      { status: 500 },
-    );
-  }
+  // 데모 페이지는 인증 불필요 - DB에서 데모 데이터 로드
+  const { getDemoWorkflows } = await import("../queries.server");
+  const workflows = await getDemoWorkflows();
+  return { isDemoMode: true, workflows };
 }
 
 interface VideoAnalysis {
@@ -119,10 +73,10 @@ interface LogicStep {
   timestamp: string;
   confidence: number;
   type: "click" | "input" | "navigate" | "wait" | "decision";
-  notes?: string; // 추가 설명
+  notes?: string;
 }
 
-// Helper function to format duration
+// Helper functions
 function formatDuration(seconds: number | null | undefined): string {
   if (!seconds) return "0:00";
   const mins = Math.floor(seconds / 60);
@@ -130,19 +84,16 @@ function formatDuration(seconds: number | null | undefined): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-// Helper function to format date
 function formatDate(date: Date | null | undefined): string {
   if (!date) return "";
   return new Date(date).toISOString().split("T")[0];
 }
 
-export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
-  const { workflows: dbWorkflows } = loaderData;
-  const fetcher = useFetcher();
-  const revalidator = useRevalidator();
+export default function DemoWork({ loaderData }: Route.ComponentProps) {
+  const { isDemoMode, workflows: dbWorkflows } = loaderData;
   
-  // Transform database workflows to VideoAnalysis format (메모이제이션)
-  const mockVideos: VideoAnalysis[] = useMemo(() => dbWorkflows.map((workflow: any) => ({
+  // DB 데이터를 VideoAnalysis 형식으로 변환
+  const mockVideos: VideoAnalysis[] = dbWorkflows.map((workflow: any) => ({
     id: workflow.workflow_id.toString(),
     title: workflow.title,
     duration: formatDuration(workflow.duration_seconds),
@@ -160,20 +111,20 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
         type: step.type as "click" | "input" | "navigate" | "wait" | "decision",
         notes: step.notes || undefined,
       })),
-  })), [dbWorkflows]);
+  }));
 
   const [selectedVideo, setSelectedVideo] = useState<VideoAnalysis | null>(
     mockVideos[0] || null,
   );
-  const [expandedSteps, setExpandedSteps] = useState<number[]>([]); // 버튼 클릭으로 고정된 단계
-  const [hoveredStep, setHoveredStep] = useState<number | null>(null); // hover 상태 단계
+  const [expandedSteps, setExpandedSteps] = useState<number[]>([]);
+  const [hoveredStep, setHoveredStep] = useState<number | null>(null);
   const [editingStep, setEditingStep] = useState<LogicStep | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editNotes, setEditNotes] = useState("");
   const [isVideoPlayerOpen, setIsVideoPlayerOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [showDemoBanner, setShowDemoBanner] = useState(true);
 
-  // 비디오 변경 시 수정 모드 리셋
   useEffect(() => {
     setIsEditMode(false);
   }, [selectedVideo?.id]);
@@ -186,65 +137,23 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
     );
   };
 
-  // 단계가 열려있는지 확인 (hover 또는 고정)
   const isStepOpen = (stepId: number) => {
     return expandedSteps.includes(stepId) || hoveredStep === stepId;
   };
 
   const openEditDialog = (step: LogicStep) => {
-    setEditingStep(step);
-    setEditNotes(step.notes || "");
-    setIsEditDialogOpen(true);
+    toast.info("데모 모드에서는 편집할 수 없습니다. 로그인하여 실제 기능을 사용해보세요!");
+    return;
   };
 
   const handleSaveNotes = () => {
-    if (!selectedVideo || !editingStep) return;
-
-    // 낙관적 업데이트: 즉시 UI에 반영
-    const updatedSteps = selectedVideo.steps.map((step) =>
-      step.id === editingStep.id ? { ...step, notes: editNotes } : step,
-    );
-    setSelectedVideo({ ...selectedVideo, steps: updatedSteps });
-
-    // FormData로 DB에 저장
-    const formData = new FormData();
-    formData.append("stepId", editingStep.id.toString());
-    formData.append("notes", editNotes);
-
-    fetcher.submit(formData, { method: "post" });
-
-    // 다이얼로그 닫고 상태 초기화
     setIsEditDialogOpen(false);
     setEditingStep(null);
     setEditNotes("");
-    
-    toast.success("메모가 저장되었습니다");
   };
 
-  // fetcher 성공 시 데이터 리로드
-  useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data?.success) {
-      revalidator.revalidate();
-    }
-  }, [fetcher.state, fetcher.data, revalidator]);
-
-  // dbWorkflows 업데이트 시 선택된 비디오도 동기화
-  useEffect(() => {
-    if (selectedVideo) {
-      const updatedVideo = mockVideos.find((v) => v.id === selectedVideo.id);
-      if (updatedVideo && JSON.stringify(updatedVideo) !== JSON.stringify(selectedVideo)) {
-        setSelectedVideo(updatedVideo);
-      }
-    }
-  }, [dbWorkflows]); // mockVideos 대신 dbWorkflows를 의존성으로 사용
-
   const handleEditProcess = () => {
-    setIsEditMode(!isEditMode);
-    if (!isEditMode) {
-      toast.success("수정 모드가 활성화되었습니다");
-    } else {
-      toast.success("변경사항이 저장되었습니다");
-    }
+    toast.info("데모 모드에서는 수정할 수 없습니다. 로그인하여 실제 기능을 사용해보세요!");
   };
 
   const getStepIcon = (type: LogicStep["type"]) => {
@@ -283,23 +192,58 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="container mx-auto max-w-7xl p-4 sm:p-6">
+      {/* 데모 모드 배너 */}
+      {showDemoBanner && (
+        <Alert className="mb-6 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 dark:border-blue-900 dark:from-blue-950 dark:to-indigo-950">
+          <Sparkles className="size-5 text-blue-600 dark:text-blue-400" />
+          <AlertTitle className="text-lg font-bold text-blue-900 dark:text-blue-100">
+            🎉 체험 모드로 둘러보는 중입니다
+          </AlertTitle>
+          <AlertDescription className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-blue-800 dark:text-blue-200">
+              실제로 동영상을 업로드하고 AI 분석을 받으려면 로그인하세요. 
+              무료로 시작할 수 있습니다!
+            </p>
+            <div className="flex gap-2">
+              <Link to="/login">
+                <Button size="sm" className="gap-2">
+                  <LogIn className="size-4" />
+                  로그인하기
+                </Button>
+              </Link>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowDemoBanner(false)}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="mb-2 text-2xl font-bold sm:text-3xl">
-              업무 프로세스
-            </h1>
+            <div className="mb-2 flex items-center gap-2">
+              <h1 className="text-2xl font-bold sm:text-3xl">
+                업무 프로세스 체험
+              </h1>
+              <Badge variant="secondary" className="gap-1">
+                <Sparkles className="size-3" />
+                데모
+              </Badge>
+            </div>
             <p className="text-muted-foreground text-sm sm:text-base">
-              업무 동영상을 업로드하면 AI가 자동으로 프로세스를 분석해드려요
+              업무 동영상을 AI가 자동으로 분석하여 프로세스를 추출합니다
             </p>
           </div>
-          <Link to="/work/upload" className="sm:shrink-0">
-            <Button size="lg" className="w-full sm:w-auto">
-              <Plus className="mr-2 size-4" />
-              동영상 업로드
-            </Button>
-          </Link>
+          <Button size="lg" disabled className="w-full sm:w-auto">
+            <Plus className="mr-2 size-4" />
+            동영상 업로드 (로그인 필요)
+          </Button>
         </div>
       </div>
 
@@ -309,7 +253,7 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
           <Card className="p-4">
             <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
               <FileVideo className="size-5" />
-              업무 목록
+              샘플 업무 목록
             </h2>
             <div className="space-y-3">
               {mockVideos.map((video) => (
@@ -393,47 +337,21 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                         AI 분석 중
                       </Badge>
                     )}
-                    {selectedVideo.status === "pending" && (
-                      <Badge
-                        variant="outline"
-                        className="text-muted-foreground flex items-center gap-1"
-                      >
-                        <Clock className="size-3" />
-                        분석 대기
-                      </Badge>
-                    )}
                   </div>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
                   className="w-full sm:w-auto sm:shrink-0"
-                  onClick={() => setIsVideoPlayerOpen(true)}
+                  disabled
                 >
-                  <Play className="mr-2 size-4" />
-                  원본 동영상 보기
+                  원본 동영상 보기 (로그인 필요)
                 </Button>
               </div>
 
               {/* Logic Steps */}
               {selectedVideo.status === "analyzed" ? (
                 <div className="space-y-4">
-                  {/* 수정 모드 알림 */}
-                  {isEditMode && (
-                    <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-900 dark:bg-purple-950">
-                      <div className="flex items-center gap-3">
-                        <Edit className="size-5 text-purple-600 dark:text-purple-400" />
-                        <div>
-                          <h4 className="font-medium text-purple-900 dark:text-purple-100">
-                            수정 모드 활성화됨
-                          </h4>
-                          <p className="text-sm text-purple-700 dark:text-purple-300">
-                            각 단계를 클릭하여 내용을 수정하거나 메모를 추가할 수 있습니다.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="flex items-center gap-2 text-lg font-semibold">
                       <Sparkles className="text-primary size-5" />
@@ -442,15 +360,11 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                     <p className="text-muted-foreground mt-1 text-xs">
                       클릭하거나 마우스를 올려 상세 내용을 확인하세요
                     </p>
-                    {/* <Button variant="outline" size="sm">
-                      순서도로 보기
-                    </Button> */}
                   </div>
 
                   <div className="relative space-y-8">
                     {selectedVideo.steps.map((step, index) => (
                       <div key={step.id} className="relative">
-                        {/* Step Card */}
                         <div
                           onMouseEnter={() => setHoveredStep(step.id)}
                           onMouseLeave={() => setHoveredStep(null)}
@@ -461,13 +375,11 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                               : "border-border bg-card hover:border-primary/50 hover:shadow-md"
                           }`}
                         >
-                          {/* Magic UI: Border Beam - hover 시 테두리 빔 효과 */}
                           {hoveredStep === step.id &&
                             !expandedSteps.includes(step.id) && (
                               <BorderBeam size={200} duration={8} delay={0} />
                             )}
 
-                          {/* Magic UI: Shine Border - 고정된 카드에 빛나는 효과 */}
                           {expandedSteps.includes(step.id) && (
                             <ShineBorder
                               borderWidth={3}
@@ -483,12 +395,10 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
 
                           <div className="p-4 transition-transform duration-300 group-hover:scale-[1.01]">
                             <div className="flex items-start gap-4">
-                              {/* Step Number */}
                               <div className="bg-primary text-primary-foreground flex size-12 shrink-0 items-center justify-center rounded-full text-lg font-bold">
                                 {step.id}
                               </div>
 
-                              {/* Step Content */}
                               <div className="flex-1">
                                 <div className="mb-2 flex items-start justify-between gap-2">
                                   <div className="flex items-center gap-2">
@@ -530,7 +440,6 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                                   </span>
                                 </div>
 
-                                {/* Expanded Details */}
                                 {isStepOpen(step.id) && (
                                   <div className="mt-3 space-y-3">
                                     <div className="bg-muted/50 rounded-lg p-3">
@@ -554,43 +463,6 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                                         </div>
                                       )}
                                     </div>
-
-                                    {/* 추가 설명 섹션 */}
-                                    {step.notes ? (
-                                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950">
-                                        <div className="mb-2 flex items-center justify-between">
-                                          <div className="flex items-center gap-2">
-                                            <Lightbulb className="size-4 text-blue-600 dark:text-blue-400" />
-                                            <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                                              추가 설명
-                                            </span>
-                                          </div>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => openEditDialog(step)}
-                                          >
-                                            <Edit className="size-3" />
-                                          </Button>
-                                        </div>
-                                        <p className="text-sm text-blue-700 dark:text-blue-300">
-                                          {step.notes}
-                                        </p>
-                                      </div>
-                                    ) : (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openEditDialog(step);
-                                        }}
-                                        className="w-full"
-                                      >
-                                        <Plus className="mr-2 size-4" />이
-                                        단계에 메모 추가하기
-                                      </Button>
-                                    )}
                                   </div>
                                 )}
                               </div>
@@ -601,26 +473,34 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                     ))}
                   </div>
 
-                  {/* Action Buttons */}
+                  {/* CTA */}
                   <div className="border-primary/50 bg-primary/5 mt-8 rounded-lg border border-dashed p-4">
                     <div className="flex items-start gap-3">
-                      <Lightbulb className="text-primary mt-0.5 size-5 shrink-0" />
+                      <LogIn className="text-primary mt-0.5 size-5 shrink-0" />
                       <div className="flex-1">
-                        <h4 className="mb-1 text-sm font-semibold">
-                          팁: 각 단계에 메모를 추가하면 팀원들이 업무를 더 쉽게
-                          이해할 수 있어요
+                        <h4 className="mb-2 text-sm font-semibold">
+                          이 기능이 마음에 드시나요? 지금 바로 시작하세요!
                         </h4>
-
+                        <p className="text-muted-foreground mb-3 text-xs">
+                          로그인하면 직접 동영상을 업로드하고, AI 분석을 받고, 팀원들과 공유할 수 있습니다.
+                        </p>
                         <div className="flex flex-col gap-2 sm:flex-row">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full sm:w-auto"
-                            onClick={handleEditProcess}
-                          >
-                            <Edit className="mr-2 size-3" />
-                            {isEditMode ? "수정 완료" : "프로세스 수정하기"}
-                          </Button>
+                          <Link to="/join">
+                            <Button size="sm" className="w-full gap-2 sm:w-auto">
+                              <Sparkles className="size-3" />
+                              무료로 시작하기
+                            </Button>
+                          </Link>
+                          <Link to="/login">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full gap-2 sm:w-auto"
+                            >
+                              <LogIn className="size-3" />
+                              로그인하기
+                            </Button>
+                          </Link>
                         </div>
                       </div>
                     </div>
@@ -639,161 +519,14 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                     동영상에서 업무 프로세스를 추출하는 중이에요
                   </p>
                   <p className="text-muted-foreground text-xs">
-                    잠시만 기다려주세요 (1-2분 소요)
+                    실제 분석을 받으려면 로그인하세요!
                   </p>
                 </div>
               )}
             </Card>
-          ) : (
-            <Card className="flex flex-col items-center justify-center p-12 text-center">
-              <div className="bg-muted mb-4 rounded-full p-4">
-                <FileVideo className="text-muted-foreground size-16" />
-              </div>
-              <h3 className="mb-2 text-xl font-semibold">
-                👋 어떤 업무를 분석할까요?
-              </h3>
-              <p className="text-muted-foreground mb-6 max-w-md text-sm">
-                왼쪽에서 분석된 동영상을 선택하거나,
-                <br />
-                새로운 업무 동영상을 업로드해보세요
-              </p>
-              <Link to="/work/upload">
-                <Button size="lg">
-                  <Plus className="mr-2 size-4" />첨 번째 동영상 업로드하기
-                </Button>
-              </Link>
-            </Card>
-          )}
+          ) : null}
         </div>
       </div>
-
-      {/* 추가 설명 편집 다이얼로그 */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Lightbulb className="text-primary size-5" />
-              단계 메모 추가하기
-            </DialogTitle>
-            <DialogDescription>
-              <span className="font-medium">{editingStep?.action}</span> 단계에
-              대한 메모를 작성해보세요.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="notes" className="text-sm font-medium">
-                메모 내용
-              </Label>
-              <Textarea
-                id="notes"
-                placeholder="예) 이 단계에서는 반드시 고객 정보를 확인해야 합니다. 주문 번호가 정확한지 다시 한번 체크 필요"
-                value={editNotes}
-                onChange={(e) => setEditNotes(e.target.value)}
-                rows={6}
-                className="resize-none"
-              />
-              <div className="bg-muted/50 rounded-md p-3">
-                <p className="text-muted-foreground flex items-start gap-2 text-xs">
-                  <Lightbulb className="mt-0.5 size-3 shrink-0" />
-                  <span>주의사항, 팁, 예외 상황 등을 작성해보세요.</span>
-                </p>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsEditDialogOpen(false);
-                setEditingStep(null);
-                setEditNotes("");
-              }}
-            >
-              <X className="mr-2 size-4" />
-              취소
-            </Button>
-            <Button onClick={handleSaveNotes} disabled={fetcher.state === "submitting"}>
-              {fetcher.state === "submitting" ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  저장 중...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 size-4" />
-                  저장
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Video Player Dialog */}
-      <Dialog open={isVideoPlayerOpen} onOpenChange={setIsVideoPlayerOpen}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileVideo className="size-5" />
-              {selectedVideo?.title}
-            </DialogTitle>
-            <DialogDescription>
-              원본 동영상을 재생하여 업무 프로세스를 확인하세요.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* Video Player */}
-            <div className="bg-black relative aspect-video w-full overflow-hidden rounded-lg">
-              <video
-                className="h-full w-full"
-                controls
-                controlsList="nodownload"
-                poster={selectedVideo?.thumbnail}
-              >
-                <source
-                  src="/placeholder-video.mp4"
-                  type="video/mp4"
-                />
-                브라우저가 비디오를 지원하지 않습니다.
-              </video>
-            </div>
-
-            {/* Video Info */}
-            <div className="bg-muted/50 flex flex-wrap items-center gap-4 rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <Clock className="text-muted-foreground size-4" />
-                <span className="text-sm">
-                  재생 시간: {selectedVideo?.duration}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileVideo className="text-muted-foreground size-4" />
-                <span className="text-sm">
-                  업로드: {selectedVideo?.uploadDate}
-                </span>
-              </div>
-              {selectedVideo?.status === "analyzed" && (
-                <Badge variant="outline" className="flex items-center gap-1">
-                  <CheckCircle2 className="size-3" />
-                  분석 완료 ({selectedVideo.steps.length}단계)
-                </Badge>
-              )}
-            </div>
-
-            {/* Playback Tips */}
-            {/*  */}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsVideoPlayerOpen(false)}
-            >
-              닫기
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

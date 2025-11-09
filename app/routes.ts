@@ -40,6 +40,14 @@ export default [
         "features/users/api/disconnect-provider.tsx",
       ),
     ]),
+    ...prefix("/work", [
+      route("/videos", "routes/api/work/videos.ts"),
+      route("/analyze", "routes/api/work/analyze.ts"),
+      route(
+        "/workflows/:workflowId/status",
+        "routes/api/work/workflows.$workflowId.status.ts",
+      ),
+    ]),
   ]),
 
   layout("features/work/layouts/work.layout.tsx", [
@@ -55,6 +63,12 @@ export default [
     route("/auth/confirm", "features/auth/screens/confirm.tsx"),
     index("features/home/screens/home.tsx"),
     route("/error", "core/screens/error.tsx"),
+    
+    // 공개 페이지 (로그인 불필요)
+    route("/service", "features/service/screens/service.tsx"),
+    route("/pricing", "features/pricing/screens/pricing.tsx"),
+    route("/demo", "features/demo/screens/demo-work.tsx"),
+    
     layout("core/layouts/public.layout.tsx", [
       // Routes that should only be visible to unauthenticated users.
       route("/login", "features/auth/screens/login.tsx"),
@@ -100,8 +114,7 @@ export default [
     ]),
   ]),
 
-  // 테스트용: Dashboard를 public으로 변경 (로그인 불필요)
-  route("/dashboard", "features/users/screens/dashboard.tsx"),
+
 
 
 

@@ -1,6 +1,7 @@
-import { sql } from "drizzle-orm";
+import { sql, relations } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   doublePrecision,
   integer,
   pgEnum,
@@ -45,6 +46,7 @@ export const workWorkflows = pgTable(
     duration_seconds: doublePrecision(),
     thumbnail_url: text(),
     status: workflowStatus().notNull().default("analyzing"),
+    is_demo: boolean().notNull().default(false),
     requested_at: timestamp(),
     completed_at: timestamp(),
     ...timestamps,
@@ -108,4 +110,19 @@ export const workAnalysisSteps = pgTable(
       `,
     }),
   ],
+);
+
+// Relations
+export const workWorkflowsRelations = relations(workWorkflows, ({ many }) => ({
+  steps: many(workAnalysisSteps),
+}));
+
+export const workAnalysisStepsRelations = relations(
+  workAnalysisSteps,
+  ({ one }) => ({
+    workflow: one(workWorkflows, {
+      fields: [workAnalysisSteps.workflow_id],
+      references: [workWorkflows.workflow_id],
+    }),
+  }),
 );

@@ -254,25 +254,25 @@ export function NavigationBar({
         {/* Center: Main navigation links (hidden on mobile) */}
         <div className="hidden h-full flex-1 items-center justify-center gap-8 md:flex">
           <Link
-            to="/work/business-logic"
+            to="/service"
             viewTransition
             className="text-muted-foreground hover:text-foreground text-sm transition-colors"
           >
-            제품
+            서비스
           </Link>
           <Link
-            to="/work/upload"
+            to="/pricing"
             viewTransition
             className="text-muted-foreground hover:text-foreground text-sm transition-colors"
           >
             가격
           </Link>
           <Link
-            to="/work/team-management"
+            to="/demo"
             viewTransition
             className="text-muted-foreground hover:text-foreground text-sm transition-colors"
           >
-            체험
+            체험하기
           </Link>
         </div>
 
@@ -307,17 +307,17 @@ export function NavigationBar({
         <SheetContent>
           <SheetHeader>
             <SheetClose asChild>
-              <Link to="/work/business-logic">업무 관리</Link>
-            </SheetClose>
-            {/* <SheetClose asChild>
-              <Link to="/blog">Blog</Link>
+              <Link to="/service">서비스</Link>
             </SheetClose>
             <SheetClose asChild>
-              <Link to="/contact">Contact</Link>
+              <Link to="/pricing">가격</Link>
             </SheetClose>
             <SheetClose asChild>
-              <Link to="/payments/checkout">Payments</Link>
-            </SheetClose> */}
+              <Link to="/demo">체험하기</Link>
+            </SheetClose>
+            <SheetClose asChild>
+              <Link to="/contact">문의하기</Link>
+            </SheetClose>
           </SheetHeader>
           {loading ? (
             <div className="flex items-center">

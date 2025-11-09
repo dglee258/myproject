@@ -348,23 +348,7 @@ export default function Upload() {
       )}
 
       {/* Info Cards */}
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        <InfoCard
-          icon={<UploadIcon className="size-5" />}
-          title="빠른 업로드"
-          description="최적화된 업로드 시스템으로 빠르게 처리"
-        />
-        <InfoCard
-          icon={<Loader2 className="size-5" />}
-          title="AI 자동 처리"
-          description="인공지능이 자동으로 분석하고 최적화"
-        />
-        <InfoCard
-          icon={<CheckCircle2 className="size-5" />}
-          title="고품질 결과"
-          description="전문가 수준의 처리 결과 제공"
-        />
-      </div>
+      {/*  */}
     </div>
   );
 }
