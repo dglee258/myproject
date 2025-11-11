@@ -10,6 +10,7 @@ import * as teamManagementSchema from "~/features/work/team-management/schema";
 import * as usersSchema from "~/features/users/schema";
 import * as paymentsSchema from "~/features/payments/schema";
 import * as pricingSchema from "~/features/pricing/schema";
+import * as serviceSchema from "~/features/service/schema";
 import * as featureFlagsSchema from "~/core/features/schema";
 
 const client = postgres(process.env.DATABASE_URL!, { prepare: false });
@@ -22,6 +23,7 @@ const db = drizzle(client, {
     ...usersSchema,
     ...paymentsSchema,
     ...pricingSchema,
+    ...serviceSchema,
     ...featureFlagsSchema,
   },
 });

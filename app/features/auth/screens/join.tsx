@@ -13,18 +13,11 @@
  */
 import type { Route } from "./+types/join";
 
-import { CheckCircle2Icon } from "lucide-react";
-import { useEffect, useRef } from "react";
-import { Form, Link, data } from "react-router";
+import { Form, Link, data, redirect } from "react-router";
 import { z } from "zod";
 
 import FormButton from "~/core/components/form-button";
 import FormErrors from "~/core/components/form-error";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "~/core/components/ui/alert";
 import {
   Card,
   CardContent,
@@ -150,10 +143,8 @@ export async function action({ request }: Route.ActionArgs) {
     return data({ error: signInError.message }, { status: 400 });
   }
 
-  // Return success response
-  return {
-    success: true,
-  };
+  // Return success response - redirect to login page with success message
+  return redirect("/login?message=signup_success");
 }
 
 /**
@@ -172,36 +163,25 @@ export async function action({ request }: Route.ActionArgs) {
  * @param actionData - Data returned from the form action, including errors or success status
  */
 export default function Join({ actionData }: Route.ComponentProps) {
-  // Reference to the form element for resetting after successful submission
-  const formRef = useRef<HTMLFormElement>(null);
-  
-  // Reset the form when registration is successful
-  useEffect(() => {
-    if (actionData && "success" in actionData && actionData.success) {
-      formRef.current?.reset();
-      formRef.current?.blur();
-    }
-  }, [actionData]);
   return (
     <div className="flex flex-col items-center justify-center gap-4">
       <Card className="w-full max-w-md">
         <CardHeader className="flex flex-col items-center">
           <CardTitle className="text-2xl font-semibold" role="heading">
-            Create an account
+            계정 생성
           </CardTitle>
           <CardDescription className="text-base">
-            Enter your details to create an account
+            계정 생성을 위해 정보를 입력해주세요
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <Form
             className="flex w-full flex-col gap-5"
             method="post"
-            ref={formRef}
           >
             <div className="flex flex-col items-start space-y-2">
               <Label htmlFor="name" className="flex flex-col items-start gap-1">
-                Name
+                이름
               </Label>
               <Input
                 id="name"
@@ -221,7 +201,7 @@ export default function Join({ actionData }: Route.ComponentProps) {
                 htmlFor="email"
                 className="flex flex-col items-start gap-1"
               >
-                Email
+                이메일
               </Label>
               <Input
                 id="email"
@@ -241,9 +221,9 @@ export default function Join({ actionData }: Route.ComponentProps) {
                 htmlFor="password"
                 className="flex flex-col items-start gap-1"
               >
-                Password
+                비밀번호
                 <small className="text-muted-foreground">
-                  Must be at least 8 characters.
+                  최소 8자 이상이어야 합니다.
                 </small>
               </Label>
               <Input
@@ -251,7 +231,7 @@ export default function Join({ actionData }: Route.ComponentProps) {
                 name="password"
                 required
                 type="password"
-                placeholder="Enter your password"
+                placeholder="비밀번호를 입력해주세요"
               />
               {actionData &&
               "fieldErrors" in actionData &&
@@ -264,14 +244,14 @@ export default function Join({ actionData }: Route.ComponentProps) {
                 htmlFor="confirmPassword"
                 className="flex flex-col items-start gap-1"
               >
-                Confirm password
+                비밀번호 확인
               </Label>
               <Input
                 id="confirmPassword"
                 name="confirmPassword"
                 required
                 type="password"
-                placeholder="Confirm your password"
+                placeholder="비밀번호를 다시 입력해주세요"
               />
               {actionData &&
               "fieldErrors" in actionData &&
@@ -279,7 +259,7 @@ export default function Join({ actionData }: Route.ComponentProps) {
                 <FormErrors errors={actionData.fieldErrors.confirmPassword} />
               ) : null}
             </div>
-            <FormButton label="Create account" className="w-full" />
+            <FormButton label="계정 생성" className="w-full" />
             {actionData && "error" in actionData && actionData.error ? (
               <FormErrors errors={[actionData.error]} />
             ) : null}
@@ -287,59 +267,47 @@ export default function Join({ actionData }: Route.ComponentProps) {
             <div className="flex items-center gap-2">
               <Checkbox id="marketing" name="marketing" />
               <Label htmlFor="marketing" className="text-muted-foreground">
-                Sign up for marketing emails
+                마케팅 이메일 수신에 동의합니다.
               </Label>
             </div>
             <div className="flex items-center gap-2">
               <Checkbox id="terms" name="terms" checked />
               <Label htmlFor="terms" className="text-muted-foreground">
                 <span>
-                  I have read and agree to the{" "}
+                  {" "}
                   <Link
                     to="/legal/terms-of-service"
                     viewTransition
                     className="text-muted-foreground text-underline hover:text-foreground underline transition-colors"
                   >
-                    Terms of Service
-                  </Link>{" "}
-                  and{" "}
+                    이용약관
+                  </Link>
+                  과{" "}
                   <Link
                     to="/legal/privacy-policy"
                     viewTransition
                     className="text-muted-foreground hover:text-foreground text-underline underline transition-colors"
                   >
-                    Privacy Policy
+                    개인정보처리방침
                   </Link>
+                  을 읽었으며 동의합니다.
                 </span>
               </Label>
             </div>
-            {actionData && "success" in actionData && actionData.success ? (
-              <Alert className="bg-green-600/20 text-green-700 dark:bg-green-950/20 dark:text-green-600">
-                <CheckCircle2Icon
-                  className="size-4"
-                  color="oklch(0.627 0.194 149.214)"
-                />
-                <AlertTitle>Account created!</AlertTitle>
-                <AlertDescription className="text-green-700 dark:text-green-600">
-                  Before you can sign in, please verify your email. You can
-                  close this tab.
-                </AlertDescription>
-              </Alert>
-            ) : null}
           </Form>
           <SignUpButtons />
         </CardContent>
       </Card>
       <div className="flex flex-col items-center justify-center text-sm">
         <p className="text-muted-foreground">
-          Already have an account?{" "}
+          이미 계정이 있으신가요? {" "}
           <Link
             to="/login"
             viewTransition
             data-testid="form-signin-link"
             className="text-muted-foreground hover:text-foreground text-underline underline transition-colors"
           >
-            Sign in
+            로그인
           </Link>
         </p>
       </div>

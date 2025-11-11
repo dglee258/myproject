@@ -14,13 +14,14 @@
 
 import type { Route } from "./+types/home";
 
-import { Link } from "react-router";
+import { Link, redirect } from "react-router";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, Sparkles, LogIn, Play } from "lucide-react";
 
 import { Button } from "~/core/components/ui/button";
 import { Card } from "~/core/components/ui/card";
 import i18next from "~/core/lib/i18next.server";
+import makeServerClient from "~/core/lib/supa-client.server";
 
 /**
  * Loader function for server-side data fetching
@@ -31,6 +32,15 @@ import i18next from "~/core/lib/i18next.server";
  * @returns Redirect to login page
  */
 export async function loader({ request }: Route.LoaderArgs) {
+  // Check if user is authenticated
+  const [client] = makeServerClient(request);
+  const { data: { user } } = await client.auth.getUser();
+  
+  // If user is logged in, redirect to work page
+  if (user) {
+    return redirect("/work");
+  }
+  
   // Load translations for server-side rendering
   const t = await i18next.getFixedT(request);
   return { title: t("home.title") };

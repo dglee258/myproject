@@ -145,8 +145,8 @@ export default function Policy({
     <div className="mx-auto w-full max-w-screen-xl space-y-10 px-5 py-10 md:px-10 md:py-20">
       {/* Navigation button to return to home page */}
       <Button variant="outline" asChild>
-        <Link to="/" viewTransition>
-          &larr; Go home
+        <Link to="/join" viewTransition>
+          &larr; 회원가입
         </Link>
       </Button>
       

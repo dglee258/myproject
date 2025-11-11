@@ -136,11 +136,11 @@ function SocialLoginButtons() {
         label="Apple"
         href="/auth/social/start/apple"
       /> */}
-      <AuthLoginButton
+      {/* <AuthLoginButton
         logo={<KakaoLogo className="size-4 scale-125 dark:text-yellow-300" />}
         label="Kakao"
         href="/auth/social/start/kakao"
-      />
+      /> */}
     </>
   );
 }

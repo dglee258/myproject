@@ -71,7 +71,7 @@ test.describe("User Login UI", () => {
    */
   test("should show alternative login methods", async ({ page }) => {
     await expect(page.getByText("Continue with GitHub")).toBeVisible();
-    await expect(page.getByText("Continue with Kakao")).toBeVisible();
+    // await expect(page.getByText("Continue with Kakao")).toBeVisible();
     await expect(page.getByText("Continue with OTP")).toBeVisible();
     await expect(page.getByText("Continue with Magic Link")).toBeVisible();
   });

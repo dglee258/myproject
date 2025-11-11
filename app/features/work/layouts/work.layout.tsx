@@ -1,3 +1,5 @@
+import type { Route } from "./+types/work.layout";
+
 import { Outlet } from "react-router";
 
 import {
@@ -5,13 +7,31 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "~/core/components/ui/sidebar";
+import makeServerClient from "~/core/lib/supa-client.server";
 
 import WorkSidebar from "../components/work-sidebar";
 
-export default function WorkLayout() {
+export async function loader({ request }: Route.LoaderArgs) {
+  const [client] = makeServerClient(request);
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  return {
+    user,
+  };
+}
+
+export default function WorkLayout({ loaderData }: Route.ComponentProps) {
+  const { user } = loaderData;
   return (
     <SidebarProvider>
-      <WorkSidebar />
+      <WorkSidebar
+        user={{
+          name: user?.user_metadata.name ?? "",
+          avatarUrl: user?.user_metadata.avatar_url ?? "",
+          email: user?.email ?? "",
+        }}
+      />
       <SidebarInset>
         <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4 lg:hidden">
           <SidebarTrigger className="-ml-1" />

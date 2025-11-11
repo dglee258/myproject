@@ -55,8 +55,19 @@ const navItems = [
 ];
 
 export default function WorkSidebar(
-  props: React.ComponentProps<typeof Sidebar>,
+  props: React.ComponentProps<typeof Sidebar> & {
+    user?: {
+      name: string;
+      email: string;
+      avatarUrl?: string;
+    };
+  },
 ) {
+  const user = props.user || {
+    name: "홍길동",
+    email: "hong@example.com",
+    avatarUrl: "https://github.com/shadcn.png",
+  };
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
       <SidebarHeader>
@@ -97,16 +108,16 @@ export default function WorkSidebar(
                 >
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarImage
-                      src="https://github.com/shadcn.png"
-                      alt="User"
+                      src={user.avatarUrl}
+                      alt={user.name}
                     />
                     <AvatarFallback className="rounded-lg">
-                      홍길동
+                      {user.name.slice(0, 2)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">홍길동</span>
-                    <span className="truncate text-xs">hong@example.com</span>
+                    <span className="truncate font-semibold">{user.name}</span>
+                    <span className="truncate text-xs">{user.email}</span>
                   </div>
                   <ChevronsUpDownIcon className="ml-auto size-4" />
                 </SidebarMenuButton>
@@ -121,16 +132,16 @@ export default function WorkSidebar(
                   <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                     <Avatar className="h-8 w-8 rounded-lg">
                       <AvatarImage
-                        src="https://github.com/shadcn.png"
-                        alt="User"
+                        src={user.avatarUrl}
+                        alt={user.name}
                       />
                       <AvatarFallback className="rounded-lg">
-                        홍길동
+                        {user.name.slice(0, 2)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">홍길동</span>
-                      <span className="truncate text-xs">hong@example.com</span>
+                      <span className="truncate font-semibold">{user.name}</span>
+                      <span className="truncate text-xs">{user.email}</span>
                     </div>
                   </div>
                 </DropdownMenuLabel>

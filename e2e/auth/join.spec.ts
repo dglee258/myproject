@@ -92,7 +92,7 @@ test.describe("User Registration UI", () => {
    */
   test("should show alternative login methods", async ({ page }) => {
     await expect(page.getByText("Continue with GitHub")).toBeVisible();
-    await expect(page.getByText("Continue with Kakao")).toBeVisible();
+    // await expect(page.getByText("Continue with Kakao")).toBeVisible();
   });
 
   /**

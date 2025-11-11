@@ -100,8 +100,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     return data({ error: error.message }, { status: 400 });
   }
 
-  // Redirect to home page with auth cookies in headers
-  return redirect("/", { headers });
+  // Redirect to work page with auth cookies in headers
+  return redirect("/work", { headers });
 }
 
 /**

@@ -8,7 +8,7 @@
  */
 import type { Route } from "./+types/login";
 
-import { AlertCircle, Loader2Icon, Play } from "lucide-react";
+import { AlertCircle, CheckCircle2Icon, Loader2Icon, Play } from "lucide-react";
 import { useRef } from "react";
 import { Form, Link, data, redirect, useFetcher } from "react-router";
 import { z } from "zod";
@@ -62,6 +62,19 @@ const loginSchema = z.object({
     .string()
     .min(8, { message: "Password must be at least 8 characters long" }),
 });
+
+/**
+ * Loader function for the login page
+ *
+ * This function handles URL parameters to display success messages
+ * from other authentication flows (e.g., signup completion).
+ */
+export async function loader({ request }: Route.LoaderArgs) {
+  const url = new URL(request.url);
+  const message = url.searchParams.get("message");
+  
+  return { message };
+}
 
 /**
  * Server action for handling login form submission
@@ -119,7 +132,7 @@ export async function action({ request }: Route.ActionArgs) {
  *
  * @param actionData - Data returned from the form action, including any errors
  */
-export default function Login({ actionData }: Route.ComponentProps) {
+export default function Login({ actionData, loaderData }: Route.ComponentProps) {
   // Reference to the form element for accessing form data
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -150,13 +163,26 @@ export default function Login({ actionData }: Route.ComponentProps) {
       <Card className="w-full max-w-md">
         <CardHeader className="flex flex-col items-center">
           <CardTitle className="text-2xl font-semibold">
-            Sign into your account
+            로그인
           </CardTitle>
           <CardDescription className="text-base">
-            Please enter your details
+            계정 정보를 입력해주세요
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
+          {/* Success message for signup completion */}
+          {loaderData?.message === "signup_success" && (
+            <Alert className="bg-green-600/20 text-green-700 dark:bg-green-950/20 dark:text-green-600">
+              <CheckCircle2Icon
+                className="size-4"
+                color="oklch(0.627 0.194 149.214)"
+              />
+              <AlertTitle>회원가입 완료!</AlertTitle>
+              <AlertDescription className="text-green-700 dark:text-green-600">
+                계정 생성이 완료되었습니다. 이메일을 확인한 후 로그인해주세요.
+              </AlertDescription>
+            </Alert>
+          )}
           <Form
             className="flex w-full flex-col gap-5"
             method="post"
@@ -167,7 +193,7 @@ export default function Login({ actionData }: Route.ComponentProps) {
                 htmlFor="email"
                 className="flex flex-col items-start gap-1"
               >
-                Email
+                이메일
               </Label>
               <Input
                 id="email"
@@ -188,7 +214,7 @@ export default function Login({ actionData }: Route.ComponentProps) {
                   htmlFor="password"
                   className="flex flex-col items-start gap-1"
                 >
-                  Password
+                  비밀번호
                 </Label>
                 <Link
                   to="/auth/forgot-password/reset"
@@ -196,7 +222,7 @@ export default function Login({ actionData }: Route.ComponentProps) {
                   tabIndex={-1}
                   viewTransition
                 >
-                  Forgot your password?
+                  비밀번호를 잊으셨나요?
                 </Link>
               </div>
               <Input
@@ -204,7 +230,7 @@ export default function Login({ actionData }: Route.ComponentProps) {
                 name="password"
                 required
                 type="password"
-                placeholder="Enter your password"
+                placeholder="비밀번호를 입력해주세요"
               />
 
               {actionData &&
@@ -213,20 +239,20 @@ export default function Login({ actionData }: Route.ComponentProps) {
                 <FormErrors errors={actionData.fieldErrors.password} />
               ) : null}
             </div>
-            <FormButton label="Log in" className="w-full" />
+            <FormButton label="로그인" className="w-full" />
             {actionData && "error" in actionData ? (
               actionData.error === "Email not confirmed" ? (
                 <Alert variant="destructive" className="bg-destructive/10">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Email not confirmed</AlertTitle>
+                  <AlertTitle>이메일 확인 필요</AlertTitle>
                   <AlertDescription className="flex flex-col items-start gap-2">
-                    Before signing in, please verify your email.
+                    로그인 전에 이메일을 확인해주세요.
                     <Button
                       variant="outline"
                       className="text-foreground flex items-center justify-between gap-2"
                       onClick={onResendClick}
                     >
-                      Resend confirmation email
+                      확인 이메일 재전송
                       {fetcher.state === "submitting" ? (
                         <Loader2Icon
                           data-testid="resend-confirmation-email-spinner"
@@ -246,14 +272,14 @@ export default function Login({ actionData }: Route.ComponentProps) {
       </Card>
       <div className="flex flex-col items-center justify-center gap-3 text-sm">
         <p className="text-muted-foreground">
-          Don't have an account?{" "}
+          계정이 없으신가요? {" "}
           <Link
             to="/join"
             viewTransition
             data-testid="form-signup-link"
             className="text-muted-foreground hover:text-foreground text-underline underline transition-colors"
           >
-            Sign up
+            회원가입
           </Link>
         </p>
         <div className="flex items-center gap-2 rounded-lg border border-dashed border-blue-200 bg-blue-50/50 px-4 py-2 dark:border-blue-900 dark:bg-blue-950/20">
