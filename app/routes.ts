@@ -41,12 +41,20 @@ export default [
       ),
     ]),
     ...prefix("/work", [
+      route("/upload", "routes/api/work/upload.ts"),
       route("/videos", "routes/api/work/videos.ts"),
       route("/analyze", "routes/api/work/analyze.ts"),
       route(
         "/workflows/:workflowId/status",
         "routes/api/work/workflows.$workflowId.status.ts",
       ),
+      route(
+        "/workflows/:workflowId",
+        "routes/api/work/workflows.$workflowId.delete.ts",
+      ),
+      route("/share/create", "routes/api/work/share.create.ts"),
+      route("/share/claim", "routes/api/work/share.claim.ts"),
+      route("/share/workflows/:token", "routes/api/work/share.workflows.$token.ts"),
     ]),
   ]),
 
@@ -68,6 +76,7 @@ export default [
     route("/service", "features/service/screens/service.tsx"),
     route("/pricing", "features/pricing/screens/pricing.tsx"),
     route("/demo", "features/demo/screens/demo-work.tsx"),
+  route("/share/:token", "features/work/share/screens/share-view.tsx"),
     
     layout("core/layouts/public.layout.tsx", [
       // Routes that should only be visible to unauthenticated users.

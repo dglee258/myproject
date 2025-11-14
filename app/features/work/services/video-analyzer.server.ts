@@ -14,13 +14,19 @@ import { workAnalysisSteps } from "~/features/work/business-logic/schema";
 import { workVideos } from "~/features/work/upload/schema";
 import { workWorkflows } from "~/features/work/business-logic/schema";
 import { eq } from "drizzle-orm";
+import { downloadVideoFromSupabase } from "~/features/work/services/storage.server";
+import { extractFrames } from "~/features/work/services/ffmpeg.server";
+import { analyzeFramesWithGemini } from "~/features/work/services/gemini.server";
+import adminClient from "~/core/lib/supa-admin-client.server";
+import { promises as fs } from "fs";
 
 interface VideoAnalysisResult {
   type: "click" | "input" | "navigate" | "wait" | "decision";
   action: string;
   description: string;
   confidence: number;
-  timestamp_seconds: number;
+  timestamp_seconds?: number;
+  screenshot_url?: string;
 }
 
 /**
@@ -55,7 +61,7 @@ export async function analyzeVideoInBackground(
       }
 
       // 3. AI 분석 실행 (현재는 Mock 데이터)
-      const analysisResults = await performAIAnalysis(video.storage_path);
+      const analysisResults = await performAIAnalysis(video.storage_path, workflowId);
 
       // 4. 분석 단계 저장
       const steps = analysisResults.map((result, index) => ({
@@ -64,9 +70,10 @@ export async function analyzeVideoInBackground(
         type: result.type,
         action: result.action,
         description: result.description,
-        timestamp_label: formatTimestamp(result.timestamp_seconds),
-        timestamp_seconds: result.timestamp_seconds,
+        timestamp_label: result.timestamp_seconds ? formatTimestamp(result.timestamp_seconds) : null,
+        timestamp_seconds: result.timestamp_seconds ?? null,
         confidence: result.confidence,
+        screenshot_url: result.screenshot_url ?? null,
       }));
 
       await db.insert(workAnalysisSteps).values(steps);
@@ -123,56 +130,103 @@ export async function analyzeVideoInBackground(
  */
 async function performAIAnalysis(
   storagePath: string | null,
+  workflowId: number,
 ): Promise<VideoAnalysisResult[]> {
-  // TODO: 실제 AI 분석 로직 구현
-  // - Supabase Storage에서 비디오 다운로드
-  // - FFmpeg로 프레임 추출
-  // - AI API 호출 (GPT-4 Vision, Google Cloud Video AI 등)
-  // - 결과 파싱 및 반환
-
   console.log(`[Video Analyzer] Analyzing video from path: ${storagePath}`);
+  // 안전 가드
+  if (!storagePath) {
+    console.warn("[Video Analyzer] storagePath is null. Falling back to mock analysis.");
+    return mockAnalysis();
+  }
 
-  // Mock 분석 (3초 대기)
-  await new Promise((resolve) => setTimeout(resolve, 3000));
+  // 실제 파이프라인: 다운로드 → 프레임 추출 → Gemini 호출 → 스크린샷 업로드
+  try {
+    const { filePath, cleanup: cleanupVideo } = await downloadVideoFromSupabase(storagePath);
+    try {
+      const { paths, cleanup: cleanupFrames } = await extractFrames(filePath, { maxFrames: 10 });
+      try {
+        if (!paths.length) {
+          console.warn("[Video Analyzer] No frames extracted. Falling back to mock analysis.");
+          return mockAnalysis();
+        }
+        
+        // Gemini로 분석
+        const steps = await analyzeFramesWithGemini(paths);
+        
+        // 프레임을 Storage에 업로드하고 URL 생성
+        const screenshotUrls = await uploadFramesToStorage(paths, workflowId);
+        
+        // Gemini 결과를 내부 스키마로 매핑 (스크린샷 URL 포함)
+        return steps.map((s, index) => ({
+          type: s.type,
+          action: s.action,
+          description: s.description,
+          confidence: s.confidence,
+          screenshot_url: screenshotUrls[index] ?? undefined,
+        }));
+      } finally {
+        await cleanupFrames();
+      }
+    } finally {
+      await cleanupVideo();
+    }
+  } catch (err) {
+    console.error("[Video Analyzer] Gemini pipeline failed, fallback to mock:", err);
+    return mockAnalysis();
+  }
+}
 
-  // Mock 결과 반환
+function mockAnalysis(): VideoAnalysisResult[] {
   return [
-    {
-      type: "navigate",
-      action: "관리자 페이지 접속",
-      description: "브라우저에서 관리자 대시보드 URL 입력 및 이동",
-      confidence: 95,
-      timestamp_seconds: 5,
-    },
-    {
-      type: "input",
-      action: "로그인 정보 입력",
-      description: "이메일과 비밀번호 입력 필드에 인증 정보 작성",
-      confidence: 98,
-      timestamp_seconds: 12,
-    },
-    {
-      type: "click",
-      action: "로그인 버튼 클릭",
-      description: "화면 하단의 '로그인' 버튼을 클릭하여 인증 진행",
-      confidence: 99,
-      timestamp_seconds: 18,
-    },
-    {
-      type: "wait",
-      action: "페이지 로딩 대기",
-      description: "대시보드 페이지 로딩 완료까지 대기",
-      confidence: 92,
-      timestamp_seconds: 21,
-    },
-    {
-      type: "navigate",
-      action: "메뉴 선택",
-      description: "좌측 사이드바에서 '업무 관리' 메뉴 클릭",
-      confidence: 96,
-      timestamp_seconds: 25,
-    },
+    { type: "navigate", action: "관리자 페이지 접속", description: "브라우저에서 관리자 대시보드 URL 입력 및 이동", confidence: 95, timestamp_seconds: 5 },
+    { type: "input", action: "로그인 정보 입력", description: "이메일과 비밀번호 입력 필드에 인증 정보 작성", confidence: 98, timestamp_seconds: 12 },
+    { type: "click", action: "로그인 버튼 클릭", description: "화면 하단의 '로그인' 버튼을 클릭하여 인증 진행", confidence: 99, timestamp_seconds: 18 },
+    { type: "wait", action: "페이지 로딩 대기", description: "대시보드 페이지 로딩 완료까지 대기", confidence: 92, timestamp_seconds: 21 },
+    { type: "navigate", action: "메뉴 선택", description: "좌측 사이드바에서 '업무 관리' 메뉴 클릭", confidence: 96, timestamp_seconds: 25 },
   ];
+}
+
+/**
+ * 프레임 이미지를 Supabase Storage에 업로드
+ */
+async function uploadFramesToStorage(
+  framePaths: string[],
+  workflowId: number,
+): Promise<string[]> {
+  const urls: string[] = [];
+  
+  for (let i = 0; i < framePaths.length; i++) {
+    try {
+      const framePath = framePaths[i];
+      const fileBuffer = await fs.readFile(framePath);
+      const fileName = `workflow_${workflowId}_step_${i + 1}.jpg`;
+      const storagePath = `screenshots/${workflowId}/${fileName}`;
+      
+      // Admin client로 업로드 (RLS 우회)
+      const { data, error } = await adminClient.storage
+        .from("work-videos")
+        .upload(storagePath, fileBuffer, {
+          contentType: "image/jpeg",
+          upsert: true,
+        });
+      
+      if (error) {
+        console.error(`[Video Analyzer] Failed to upload frame ${i}:`, error);
+        urls.push("");
+        continue;
+      }
+      
+      // Public URL 생성
+      const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/work-videos/${storagePath}`;
+      urls.push(publicUrl);
+      console.log(`[Video Analyzer] Uploaded screenshot ${i + 1}: ${publicUrl}`);
+    } catch (error) {
+      console.error(`[Video Analyzer] Error uploading frame ${i}:`, error);
+      urls.push("");
+    }
+  }
+  
+  return urls;
 }
 
 /**

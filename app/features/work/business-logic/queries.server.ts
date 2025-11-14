@@ -19,6 +19,7 @@ export async function getUserWorkflows(userId: string) {
     orderBy: desc(workWorkflows.created_at),
     with: {
       steps: true,
+      sourceVideo: true,
     },
   });
 

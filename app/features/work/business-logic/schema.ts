@@ -85,6 +85,7 @@ export const workAnalysisSteps = pgTable(
     timestamp_label: text(),
     timestamp_seconds: doublePrecision(),
     confidence: integer(),
+    screenshot_url: text(),
     notes: text(),
     ...timestamps,
   },
@@ -113,8 +114,12 @@ export const workAnalysisSteps = pgTable(
 );
 
 // Relations
-export const workWorkflowsRelations = relations(workWorkflows, ({ many }) => ({
+export const workWorkflowsRelations = relations(workWorkflows, ({ many, one }) => ({
   steps: many(workAnalysisSteps),
+  sourceVideo: one(workVideos, {
+    fields: [workWorkflows.source_video_id],
+    references: [workVideos.video_id],
+  }),
 }));
 
 export const workAnalysisStepsRelations = relations(

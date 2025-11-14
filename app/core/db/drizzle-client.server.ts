@@ -5,6 +5,7 @@ import postgres from "postgres";
 import * as uploadSchema from "~/features/work/upload/schema";
 import * as businessLogicSchema from "~/features/work/business-logic/schema";
 import * as teamManagementSchema from "~/features/work/team-management/schema";
+import * as shareSchema from "~/features/work/share/schema";
 
 // Other feature schemas
 import * as usersSchema from "~/features/users/schema";
@@ -20,6 +21,7 @@ const db = drizzle(client, {
     ...uploadSchema,
     ...businessLogicSchema,
     ...teamManagementSchema,
+    ...shareSchema,
     ...usersSchema,
     ...paymentsSchema,
     ...pricingSchema,

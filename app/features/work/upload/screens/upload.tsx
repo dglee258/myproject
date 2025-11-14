@@ -8,9 +8,12 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { useLoaderData } from "react-router";
 
 import { Button } from "~/core/components/ui/button";
 import { Progress } from "~/core/components/ui/progress";
+import makeServerClient from "~/core/lib/supa-client.server";
+import { supabaseBrowser } from "~/core/lib/supa-client.client";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -29,7 +32,19 @@ interface VideoFile {
   error?: string;
 }
 
+export async function loader({ request }: Route.LoaderArgs) {
+  const [supabase] = makeServerClient(request);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { user: null };
+  }
+  return { user };
+}
+
 export default function Upload() {
+  const { user } = useLoaderData<typeof loader>();
   const [videoFile, setVideoFile] = useState<VideoFile | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -75,36 +90,98 @@ export default function Upload() {
   };
 
   const handleUpload = async () => {
-    if (!videoFile) return;
+    if (!videoFile || !user) return;
+    try {
+      // 1) Storage 업로드 (서버 사이드로 전송)
+      setVideoFile({ ...videoFile, status: "uploading", progress: 0 });
 
-    // 업로드 시뮬레이션
-    setVideoFile({ ...videoFile, status: "uploading", progress: 0 });
+      const formData = new FormData();
+      formData.append("file", videoFile.file);
 
-    // 업로드 진행률 시뮬레이션
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      const uploadRes = await fetch("/api/work/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!uploadRes.ok) {
+        const j = await uploadRes.json().catch(() => ({}));
+        throw new Error(j.error || `업로드 실패(${uploadRes.status})`);
+      }
+
+      const { path } = await uploadRes.json();
+
+      // 2) 비디오 레코드 생성
+      const createRes = await fetch("/api/work/videos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: videoFile.file.name.replace(/\.[^/.]+$/, ""),
+          original_filename: videoFile.file.name,
+          mime_type: videoFile.file.type,
+          file_size: videoFile.file.size,
+          storage_path: path,
+        }),
+      });
+      if (!createRes.ok) {
+        const j = await createRes.json().catch(() => ({}));
+        throw new Error(j.error || `비디오 생성 실패(${createRes.status})`);
+      }
+      const { video_id } = await createRes.json();
+
+      // 3) 분석 시작
+      setVideoFile((prev) => (prev ? { ...prev, status: "processing", progress: 0 } : null));
+      const analyzeRes = await fetch("/api/work/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ video_id }),
+      });
+      if (!analyzeRes.ok) {
+        const j = await analyzeRes.json().catch(() => ({}));
+        throw new Error(j.error || `분석 시작 실패(${analyzeRes.status})`);
+      }
+      const { workflow_id } = await analyzeRes.json();
+
+      // 4) 진행 상황 폴링
+      await pollAnalysisProgress(workflow_id);
+      setVideoFile((prev) => (prev ? { ...prev, status: "completed", progress: 100 } : null));
+
+      // 5) 결과 페이지로 이동
+      window.location.href = `/work/business-logic?workflow=${workflow_id}`;
+    } catch (error: any) {
+      console.error("Upload error:", error);
       setVideoFile((prev) =>
-        prev ? { ...prev, progress: i, status: "uploading" } : null,
+        prev
+          ? {
+              ...prev,
+              status: "error",
+              error: error?.message || "업로드 중 오류가 발생했습니다",
+            }
+          : null,
       );
     }
-
-    // AI 처리 시뮬레이션
-    setVideoFile((prev) =>
-      prev ? { ...prev, status: "processing", progress: 0 } : null,
-    );
-
-    for (let i = 0; i <= 100; i += 5) {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      setVideoFile((prev) =>
-        prev ? { ...prev, progress: i, status: "processing" } : null,
-      );
-    }
-
-    // 완료
-    setVideoFile((prev) =>
-      prev ? { ...prev, status: "completed", progress: 100 } : null,
-    );
   };
+
+  async function pollAnalysisProgress(workflowId: number) {
+    return new Promise<void>((resolve, reject) => {
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/work/workflows/${workflowId}/status`);
+          if (!res.ok) throw new Error(`상태 조회 실패(${res.status})`);
+          const { status, progress } = await res.json();
+          setVideoFile((prev) =>
+            prev ? { ...prev, progress, status: status === "analyzed" ? "completed" : "processing" } : null,
+          );
+          if (status === "analyzed") {
+            clearInterval(interval);
+            resolve();
+          }
+        } catch (e) {
+          clearInterval(interval);
+          reject(e);
+        }
+      }, 2000);
+    });
+  }
 
   const handleRemove = () => {
     if (videoFile) {
@@ -182,18 +259,18 @@ export default function Upload() {
               </p>
             </div>
 
-            <label htmlFor="file-upload">
-              <Button asChild>
-                <span className="cursor-pointer">파일 선택</span>
+            <label htmlFor="file-upload" className="cursor-pointer">
+              <Button type="button" asChild>
+                <span>파일 선택</span>
               </Button>
-              <input
-                id="file-upload"
-                type="file"
-                accept="video/*"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
             </label>
+            <input
+              id="file-upload"
+              type="file"
+              accept="video/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
           </div>
         </div>
       ) : (

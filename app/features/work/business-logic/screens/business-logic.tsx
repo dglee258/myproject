@@ -20,11 +20,12 @@ import {
   Plus,
   Save,
   Sparkles,
+  Trash2,
   Volume2,
   X,
 } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
-import { Link, useFetcher, useRevalidator, data } from "react-router";
+import { Link, useFetcher, useRevalidator, data, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 import { Badge } from "~/core/components/ui/badge";
@@ -109,6 +110,7 @@ interface VideoAnalysis {
   uploadDate: string;
   status: "analyzed" | "analyzing" | "pending";
   thumbnail: string;
+  videoUrl?: string;
   steps: LogicStep[];
 }
 
@@ -119,6 +121,7 @@ interface LogicStep {
   timestamp: string;
   confidence: number;
   type: "click" | "input" | "navigate" | "wait" | "decision";
+  screenshot_url?: string;
   notes?: string; // 추가 설명
 }
 
@@ -140,27 +143,37 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   const { workflows: dbWorkflows } = loaderData;
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
+  const navigate = useNavigate();
   
   // Transform database workflows to VideoAnalysis format (메모이제이션)
-  const mockVideos: VideoAnalysis[] = useMemo(() => dbWorkflows.map((workflow: any) => ({
-    id: workflow.workflow_id.toString(),
-    title: workflow.title,
-    duration: formatDuration(workflow.duration_seconds),
-    uploadDate: formatDate(workflow.created_at),
-    status: workflow.status as "analyzed" | "analyzing" | "pending",
-    thumbnail: workflow.thumbnail_url || "/placeholder-video.jpg",
-    steps: (workflow.steps || [])
-      .sort((a: any, b: any) => a.sequence_no - b.sequence_no)
-      .map((step: any) => ({
-        id: step.step_id,
-        action: step.action,
-        description: step.description,
-        timestamp: step.timestamp_label || "00:00",
-        confidence: step.confidence || 0,
-        type: step.type as "click" | "input" | "navigate" | "wait" | "decision",
-        notes: step.notes || undefined,
-      })),
-  })), [dbWorkflows]);
+  const mockVideos: VideoAnalysis[] = useMemo(() => dbWorkflows.map((workflow: any) => {
+    // Generate Supabase Storage URL if storage_path exists
+    const videoUrl = workflow.sourceVideo?.storage_path
+      ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/work-videos/${workflow.sourceVideo.storage_path}`
+      : undefined;
+
+    return {
+      id: workflow.workflow_id.toString(),
+      title: workflow.title,
+      duration: formatDuration(workflow.duration_seconds),
+      uploadDate: formatDate(workflow.created_at),
+      status: workflow.status as "analyzed" | "analyzing" | "pending",
+      thumbnail: workflow.thumbnail_url || "/placeholder-video.jpg",
+      videoUrl,
+      steps: (workflow.steps || [])
+        .sort((a: any, b: any) => a.sequence_no - b.sequence_no)
+        .map((step: any) => ({
+          id: step.step_id,
+          action: step.action,
+          description: step.description,
+          timestamp: formatDuration(step.timestamp_seconds),
+          confidence: step.confidence || 0,
+          type: step.type as "click" | "input" | "navigate" | "wait" | "decision",
+          screenshot_url: step.screenshot_url || undefined,
+          notes: step.notes || undefined,
+        })),
+    };
+  }), [dbWorkflows]);
 
   const [selectedVideo, setSelectedVideo] = useState<VideoAnalysis | null>(
     mockVideos[0] || null,
@@ -294,12 +307,17 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
               업무 동영상을 업로드하면 AI가 자동으로 프로세스를 분석해드려요
             </p>
           </div>
-          <Link to="/work/upload" className="sm:shrink-0">
-            <Button size="lg" className="w-full sm:w-auto">
-              <Plus className="mr-2 size-4" />
-              동영상 업로드
-            </Button>
-          </Link>
+          <Button 
+            size="lg" 
+            className="w-full sm:w-auto sm:shrink-0"
+            onClick={() => {
+              console.log('Upload button clicked');
+              navigate('/work/upload');
+            }}
+          >
+            <Plus className="mr-2 size-4" />
+            동영상 업로드
+          </Button>
         </div>
       </div>
 
@@ -404,15 +422,43 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                     )}
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full sm:w-auto sm:shrink-0"
-                  onClick={() => setIsVideoPlayerOpen(true)}
-                >
-                  <Play className="mr-2 size-4" />
-                  원본 동영상 보기
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:w-auto sm:shrink-0"
+                    onClick={() => setIsVideoPlayerOpen(true)}
+                  >
+                    <Play className="mr-2 size-4" />
+                    원본 동영상 보기
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={async () => {
+                      if (confirm('이 프로세스를 삭제하시겠습니까?')) {
+                        try {
+                          const res = await fetch(`/api/work/workflows/${selectedVideo.id}`, {
+                            method: 'DELETE',
+                          });
+                          if (res.ok) {
+                            toast.success('프로세스가 삭제되었습니다');
+                            revalidator.revalidate();
+                            setSelectedVideo(mockVideos.filter(v => v.id !== selectedVideo.id)[0] || null);
+                          } else {
+                            toast.error('삭제에 실패했습니다');
+                          }
+                        } catch (error) {
+                          toast.error('삭제 중 오류가 발생했습니다');
+                        }
+                      }
+                    }}
+                  >
+                    <Trash2 className="mr-2 size-4" />
+                    삭제
+                  </Button>
+                </div>
               </div>
 
               {/* Logic Steps */}
@@ -420,17 +466,30 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                 <div className="space-y-4">
                   {/* 수정 모드 알림 */}
                   {isEditMode && (
-                    <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-900 dark:bg-purple-950">
-                      <div className="flex items-center gap-3">
-                        <Edit className="size-5 text-purple-600 dark:text-purple-400" />
-                        <div>
-                          <h4 className="font-medium text-purple-900 dark:text-purple-100">
-                            수정 모드 활성화됨
-                          </h4>
-                          <p className="text-sm text-purple-700 dark:text-purple-300">
-                            각 단계를 클릭하여 내용을 수정하거나 메모를 추가할 수 있습니다.
-                          </p>
+                    <div className="rounded-lg border-2 border-purple-500 bg-purple-100 p-4 shadow-lg dark:border-purple-400 dark:bg-purple-950 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-full bg-purple-500 p-2">
+                            <Edit className="size-5 text-white" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-purple-900 dark:text-purple-100 flex items-center gap-2">
+                              ✏️ 수정 모드 활성화
+                              <Badge variant="default" className="bg-purple-600">편집 중</Badge>
+                            </h4>
+                            <p className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                              각 단계 카드를 클릭하면 메모를 추가하거나 수정할 수 있습니다.
+                            </p>
+                          </div>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setIsEditMode(false)}
+                          className="text-purple-700 hover:text-purple-900 dark:text-purple-300"
+                        >
+                          <X className="size-4" />
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -485,7 +544,7 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                             <div className="flex items-start gap-4">
                               {/* Step Number */}
                               <div className="bg-primary text-primary-foreground flex size-12 shrink-0 items-center justify-center rounded-full text-lg font-bold">
-                                {step.id}
+                                {index + 1}
                               </div>
 
                               {/* Step Content */}
@@ -525,14 +584,27 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                                     {step.type === "wait" && "대기"}
                                     {step.type === "decision" && "판단"}
                                   </Badge>
-                                  <span className="text-muted-foreground text-sm">
-                                    {step.timestamp}
-                                  </span>
+                                  {step.timestamp && step.timestamp !== "0:00" && (
+                                    <span className="text-muted-foreground text-sm">
+                                      {step.timestamp}
+                                    </span>
+                                  )}
                                 </div>
 
                                 {/* Expanded Details */}
                                 {isStepOpen(step.id) && (
                                   <div className="mt-3 space-y-3">
+                                    {/* 스크린샷 이미지 */}
+                                    {step.screenshot_url && (
+                                      <div className="rounded-lg overflow-hidden border border-border">
+                                        <img
+                                          src={step.screenshot_url}
+                                          alt={`${step.action} 스크린샷`}
+                                          className="w-full h-auto"
+                                          loading="lazy"
+                                        />
+                                      </div>
+                                    )}
                                     <div className="bg-muted/50 rounded-lg p-3">
                                       <p className="text-muted-foreground text-sm">
                                         {step.description}
@@ -657,11 +729,7 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                 <br />
                 새로운 업무 동영상을 업로드해보세요
               </p>
-              <Link to="/work/upload">
-                <Button size="lg">
-                  <Plus className="mr-2 size-4" />첨 번째 동영상 업로드하기
-                </Button>
-              </Link>
+              
             </Card>
           )}
         </div>
@@ -745,18 +813,24 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
           <div className="space-y-4">
             {/* Video Player */}
             <div className="bg-black relative aspect-video w-full overflow-hidden rounded-lg">
-              <video
-                className="h-full w-full"
-                controls
-                controlsList="nodownload"
-                poster={selectedVideo?.thumbnail}
-              >
-                <source
-                  src="/placeholder-video.mp4"
-                  type="video/mp4"
-                />
-                브라우저가 비디오를 지원하지 않습니다.
-              </video>
+              {selectedVideo?.videoUrl ? (
+                <video
+                  className="h-full w-full"
+                  controls
+                  controlsList="nodownload"
+                  poster={selectedVideo?.thumbnail}
+                  src={selectedVideo.videoUrl}
+                >
+                  브라우저가 비디오를 지원하지 않습니다.
+                </video>
+              ) : (
+                <div className="flex h-full items-center justify-center text-white">
+                  <div className="text-center">
+                    <FileVideo className="mx-auto size-12 mb-4 opacity-50" />
+                    <p>동영상을 불러올 수 없습니다</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Video Info */}

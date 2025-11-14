@@ -6,7 +6,7 @@ import {
   UserIcon,
   UsersIcon,
 } from "lucide-react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 
 import {
   Avatar,
@@ -63,6 +63,7 @@ export default function WorkSidebar(
     };
   },
 ) {
+  const navigate = useNavigate();
   const user = props.user || {
     name: "홍길동",
     email: "hong@example.com",
@@ -85,11 +86,14 @@ export default function WorkSidebar(
             <SidebarMenu>
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <Link to={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
+                  <SidebarMenuButton
+                    onClick={() => {
+                      console.log('Navigating to:', item.url);
+                      navigate(item.url);
+                    }}
+                  >
+                    <item.icon />
+                    <span>{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
