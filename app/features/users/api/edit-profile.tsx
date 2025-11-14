@@ -34,8 +34,9 @@ import { getUserProfile } from "../queries";
  */
 const schema = z.object({
   name: z.string().min(1),
-  avatar: z.instanceof(File),
-  marketingConsent: z.coerce.boolean(),
+  // 파일 업로드는 선택 사항
+  avatar: z.instanceof(File).optional(),
+  marketingConsent: z.coerce.boolean().optional().default(false),
 });
 
 /**
@@ -90,42 +91,54 @@ export async function action({ request }: Route.ActionArgs) {
   }
   
   // Get current user profile to determine existing avatar URL
-  const profile = await getUserProfile(client, { userId: user.id });
-  let avatarUrl = profile?.avatar_url || null;
+  // Use a direct query to avoid strict typing issues in generated Database types
+  const { data: currentProfile } = await (client as any)
+    .from("profiles")
+    .select("avatar_url")
+    .eq("profile_id", user.id)
+    .single();
+  let avatarUrl = currentProfile?.avatar_url || null;
   
   // Handle avatar image upload if a valid file was provided
-  if (
-    validData.avatar &&
-    validData.avatar instanceof File &&
-    validData.avatar.size > 0 &&
-    validData.avatar.size < 1024 * 1024 && // 1MB size limit
-    validData.avatar.type.startsWith("image/") // Ensure it's an image file
-  ) {
-    // Upload avatar to Supabase Storage
-    const { error: uploadError } = await client.storage
-      .from("avatars")
-      .upload(user.id, validData.avatar, {
-        upsert: true, // Replace existing avatar if any
-      });
-      
-    // Handle upload errors
-    if (uploadError) {
-      return data({ error: uploadError.message }, { status: 400 });
+  if (validData.avatar && validData.avatar instanceof File) {
+    // 빈 파일(선택 안 함) 처리
+    if (validData.avatar.size === 0) {
+      // 유지: 기존 아바타 URL 사용
+    } else {
+      // 용량/타입 검증
+      if (validData.avatar.size > 1024 * 1024) {
+        return data({ error: "아바타 파일은 최대 1MB까지 업로드할 수 있습니다." }, { status: 400 });
+      }
+      if (!validData.avatar.type.startsWith("image/")) {
+        return data({ error: "이미지 파일만 업로드할 수 있습니다." }, { status: 400 });
+      }
+
+      // 업로드 경로: avatars/{userId}.jpg (혹은 기존 키 유지)
+      const objectKey = `${user.id}`;
+      const { error: uploadError } = await client.storage
+        .from("avatars")
+        .upload(objectKey, validData.avatar, {
+          upsert: true,
+          contentType: validData.avatar.type || "image/octet-stream",
+        });
+
+      if (uploadError) {
+        return data({ error: uploadError.message }, { status: 400 });
+      }
+
+      const {
+        data: { publicUrl },
+      } = await client.storage.from("avatars").getPublicUrl(objectKey);
+      avatarUrl = publicUrl;
     }
-    
-    // Get public URL for the uploaded avatar
-    const {
-      data: { publicUrl },
-    } = await client.storage.from("avatars").getPublicUrl(user.id);
-    avatarUrl = publicUrl;
   }
   
   // Update profile information in the profiles table
-  const { error: updateProfileError } = await client
+  const { error: updateProfileError } = await (client as any)
     .from("profiles")
     .update({
       name: validData.name,
-      marketing_consent: validData.marketingConsent,
+      marketing_consent: !!validData.marketingConsent,
       avatar_url: avatarUrl,
     })
     .eq("profile_id", user.id);
@@ -135,7 +148,7 @@ export async function action({ request }: Route.ActionArgs) {
     data: {
       name: validData.name,
       display_name: validData.name,
-      marketing_consent: validData.marketingConsent,
+      marketing_consent: !!validData.marketingConsent,
       avatar_url: avatarUrl,
     },
   });

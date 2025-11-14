@@ -112,6 +112,9 @@ export default [
       ]),
       // Routes that should only be visible to authenticated users.
       route("/logout", "features/auth/screens/logout.tsx"),
+      // Account / Profile pages
+      route("/account", "features/users/screens/account.tsx"),
+      route("/account/edit", "features/users/screens/account.edit.tsx"),
     ]),
     route("/contact", "features/contact/screens/contact-us.tsx"),
     ...prefix("/payments", [
