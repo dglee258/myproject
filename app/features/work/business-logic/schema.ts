@@ -15,6 +15,7 @@ import { authUid, authUsers, authenticatedRole } from "drizzle-orm/supabase";
 
 import { timestamps } from "~/core/db/helpers.server";
 import { workVideos } from "../upload/schema";
+import { workTeams } from "../team-management/team-schema";
 
 export const stepType = pgEnum("step_type", [
   "click",
@@ -37,6 +38,7 @@ export const workWorkflows = pgTable(
       .primaryKey()
       .generatedAlwaysAsIdentity(),
     owner_id: uuid().references(() => authUsers.id, { onDelete: "cascade" }),
+    team_id: uuid().references(() => workTeams.team_id, { onDelete: "cascade" }),
     title: text().notNull(),
     description: text(),
     source_video_id: bigint({ mode: "number" }).references(
@@ -58,6 +60,15 @@ export const workWorkflows = pgTable(
       as: "permissive",
       using: sql`
         ${authUid} = ${t.owner_id}
+        OR (
+          ${t.team_id} IS NOT NULL 
+          AND EXISTS (
+            SELECT 1 FROM work_team_members tm
+            WHERE tm.team_id = ${t.team_id}
+              AND tm.user_id = ${authUid}
+              AND tm.status = 'active'
+          )
+        )
         OR EXISTS (
           SELECT 1 FROM work_workflow_members m
           WHERE m.workflow_id = ${t.workflow_id}

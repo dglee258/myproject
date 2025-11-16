@@ -1,6 +1,7 @@
 import type { Route } from "./+types/work.layout";
 
 import { Outlet } from "react-router";
+import { redirect } from "react-router";
 
 import {
   SidebarInset,
@@ -16,6 +17,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   const {
     data: { user },
   } = await client.auth.getUser();
+
+  if (!user) {
+    // 현재 URL을 redirect 파라미터로 포함하여 로그인 페이지로 리디렉션
+    const url = new URL(request.url);
+    const redirectTo = url.pathname + url.search;
+    throw redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
+  }
+
   return {
     user,
   };

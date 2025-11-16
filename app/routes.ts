@@ -40,6 +40,17 @@ export default [
         "features/users/api/disconnect-provider.tsx",
       ),
     ]),
+    ...prefix("/teams", [
+      route("/", "routes/api/teams/index.ts"),
+      route("/:teamId/members", "routes/api/teams/$teamId.members.ts"),
+      route("/:teamId/members/:memberId", "routes/api/teams/$teamId.members.$memberId.ts"),
+      route("/:teamId/workflows", "routes/api/teams/$teamId.workflows.ts"),
+      route("/:teamId/workflows/:workflowId/shares", "routes/api/teams/$teamId.workflows.$workflowId.shares.ts"),
+      route("/:teamId/migrate-workflows", "routes/api/teams/$teamId.migrate-workflows.ts"),
+      route("/:teamId/verify", "routes/api/teams/$teamId.verify.ts"),
+      route("/invites/:token", "routes/api/teams/invites.$token.ts"),
+      route("/invites/:token/accept", "routes/api/teams/invites.$token.accept.ts"),
+    ]),
     ...prefix("/work", [
       route("/upload", "routes/api/work/upload.ts"),
       route("/videos", "routes/api/work/videos.ts"),
@@ -51,6 +62,19 @@ export default [
       route(
         "/workflows/:workflowId",
         "routes/api/work/workflows.$workflowId.delete.ts",
+      ),
+      // Team management APIs (legacy workflow-based, will be deprecated)
+      route(
+        "/workflows/:workflowId/members",
+        "routes/api/work/workflows.$workflowId.members.ts",
+      ),
+      route(
+        "/workflows/:workflowId/members/:memberId",
+        "routes/api/work/workflows.$workflowId.members.$memberId.ts",
+      ),
+      route(
+        "/workflows/:workflowId/invites",
+        "routes/api/work/workflows.$workflowId.invites.ts",
       ),
       route("/share/create", "routes/api/work/share.create.ts"),
       route("/share/claim", "routes/api/work/share.claim.ts"),
@@ -64,6 +88,7 @@ export default [
       route("/business-logic", "features/work/business-logic/screens/business-logic.tsx"),
       route("/upload", "features/work/upload/screens/upload.tsx"),
       route("/team-management", "features/work/team-management/screens/team-management.tsx"),
+      route("/invite/:token", "features/work/team-management/screens/team-invite.tsx"),
     ]),
   ]),
 

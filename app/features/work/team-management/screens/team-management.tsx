@@ -1,25 +1,30 @@
 import type { Route } from "./+types/team-management";
 
 import {
+  AlertCircle,
+  ArrowRight,
   CheckCircle2,
+  Copy,
+  Link as LinkIcon,
   Loader2,
   Mail,
   MoreVertical,
-  Pencil,
   Plus,
   Search,
-  Trash2,
+  Share2,
+  Shield,
   UserPlus,
   Users,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { toast } from "sonner";
-import { z } from "zod";
 
+import { Alert, AlertDescription } from "~/core/components/ui/alert";
 import { Badge } from "~/core/components/ui/badge";
 import { Button } from "~/core/components/ui/button";
-import { Card } from "~/core/components/ui/card";
+import { Card, CardContent, CardHeader } from "~/core/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +57,8 @@ import {
   TableHeader,
   TableRow,
 } from "~/core/components/ui/table";
+import { Textarea } from "~/core/components/ui/textarea";
+import makeServerClient from "~/core/lib/supa-client.server";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -60,596 +67,1022 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-// 팀원 데이터 타입 정의
-interface TeamMember {
-  id: string;
+// Type definitions
+interface Team {
+  team_id: string;
   name: string;
-  email: string;
-  role: "admin" | "member";
-  status: "active" | "pending" | "inactive";
-  joinedAt: string;
-  avatar?: string;
+  owner_id: string;
 }
 
-// 폼 검증 스키마
-const teamMemberSchema = z.object({
-  name: z.string().min(2, "이름은 최소 2자 이상이어야 합니다"),
-  email: z.string().email("올바른 이메일 형식이 아닙니다"),
-  role: z.enum(["admin", "member"], {
-    required_error: "역할을 선택해주세요",
-  }),
-});
+interface TeamMember {
+  member_id: string;
+  email: string;
+  role: string;
+  status: string;
+  invited_at: string;
+  joined_at: string | null;
+  user_id: string | null;
+}
 
-type TeamMemberFormData = z.infer<typeof teamMemberSchema>;
+interface Workflow {
+  workflow_id: number;
+  title: string;
+  description: string | null;
+  status: string;
+  created_at: string;
+  team_id: string | null;
+}
 
-// 목 데이터
-const initialMembers: TeamMember[] = [
-  {
-    id: "1",
-    name: "김철수",
-    email: "kim@example.com",
-    role: "admin",
-    status: "active",
-    joinedAt: "2025-10-15",
-  },
-  {
-    id: "2",
-    name: "이영희",
-    email: "lee@example.com",
-    role: "member",
-    status: "active",
-    joinedAt: "2025-10-20",
-  },
-  {
-    id: "3",
-    name: "박민수",
-    email: "park@example.com",
-    role: "member",
-    status: "active",
-    joinedAt: "2025-10-16",
-  },
-  {
-    id: "4",
-    name: "정수진",
-    email: "jung@example.com",
-    role: "member",
-    status: "pending",
-    joinedAt: "2025-10-27",
-  },
-];
+interface WorkflowShare {
+  share_id: string;
+  workflow_id: number;
+  team_member_id: string;
+  shared_by: string;
+}
 
-export default function TeamManagement() {
-  const [members, setMembers] = useState<TeamMember[]>(initialMembers);
+interface VerificationResult {
+  success: boolean;
+  summary: {
+    total_members: number;
+    active_members: number;
+    total_workflows: number;
+    members_with_access: number;
+  };
+  member_access: Array<{
+    member_id: string;
+    email: string;
+    accessible_workflows: number;
+    issues: string[];
+  }>;
+  recommendations: string[];
+}
+
+export async function loader({ request }: Route.LoaderArgs) {
+  const [client] = makeServerClient(request);
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+
+  if (!user) {
+    throw new Response("Unauthorized", { status: 401 });
+  }
+
+  return { user };
+}
+
+export default function TeamManagement({ loaderData }: Route.ComponentProps) {
+  const user = loaderData?.user;
+  
+  if (!user) {
+    return <div>인증되지 않았습니다.</div>;
+  }
+
+  // Type assertion to ensure user is properly typed
+  const typedUser = user as {
+    id: string;
+    email: string | null;
+  } & Record<string, any>;
+
+  // State
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamId, setTeamId] = useState<string>("");
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [myStatus, setMyStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterRole, setFilterRole] = useState<string>("all");
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  
+  // Dialog states
+  const [isCreateTeamDialogOpen, setIsCreateTeamDialogOpen] = useState(false);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [newTeamDescription, setNewTeamDescription] = useState("");
+  const [isCreatingTeam, setIsCreatingTeam] = useState(false);
+  
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+  
+  const [isMigrateDialogOpen, setIsMigrateDialogOpen] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
+  
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
+  const [workflowShares, setWorkflowShares] = useState<WorkflowShare[]>([]);
+  const [shareType, setShareType] = useState<"all" | "specific">("all");
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  
+  const [isVerifyDialogOpen, setIsVerifyDialogOpen] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
+  
   const [isLoading, setIsLoading] = useState(false);
 
-  // 폼 상태
-  const [formData, setFormData] = useState<TeamMemberFormData>({
-    name: "",
-    email: "",
-    role: "member",
-  });
-  const [formErrors, setFormErrors] = useState<
-    Partial<Record<keyof TeamMemberFormData, string>>
-  >({});
-
-  // 필터링된 팀원 목록
+  // Computed values
+  const myRole = members.find((m) => m.user_id === typedUser.id)?.role || null;
+  const isAdmin = myRole === "owner" || myRole === "admin";
+  
   const filteredMembers = members.filter((member) => {
-    const matchesSearch =
-      member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole = filterRole === "all" || member.role === filterRole;
-    return matchesSearch && matchesRole;
+    const matchesSearch = member.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = filterStatus === "all" || member.status === filterStatus;
+    return matchesSearch && matchesStatus;
   });
 
-  // 폼 검증
-  const validateForm = (data: TeamMemberFormData): boolean => {
-    try {
-      teamMemberSchema.parse(data);
-      setFormErrors({});
-      return true;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const errors: Partial<Record<keyof TeamMemberFormData, string>> = {};
-        error.errors.forEach((err) => {
-          if (err.path[0]) {
-            errors[err.path[0] as keyof TeamMemberFormData] = err.message;
+  // Load teams
+  useEffect(() => {
+    let cancelled = false;
+    async function loadTeams() {
+      try {
+        const res = await fetch("/api/teams");
+        if (!res.ok) throw new Error("Failed to load teams");
+        const json = await res.json();
+        if (!cancelled) {
+          setTeams(json.teams || []);
+          // Only set initial teamId if no team is selected
+          if (json.teams && json.teams.length > 0 && !teamId) {
+            setTeamId(json.teams[0].team_id);
           }
-        });
-        setFormErrors(errors);
+        }
+      } catch (e) {
+        console.error("[Team] Failed to load teams", e);
+        toast.error("팀 목록을 불러오는데 실패했습니다");
       }
-      return false;
     }
-  };
-
-  // 팀원 추가
-  const handleAddMember = async () => {
-    if (!validateForm(formData)) {
-      toast.error("입력값을 확인해주세요");
-      return;
-    }
-
-    setIsLoading(true);
-
-    // 시뮬레이션: 실제로는 API 호출
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const newMember: TeamMember = {
-      id: Date.now().toString(),
-      ...formData,
-      status: "pending",
-      joinedAt: new Date().toISOString().split("T")[0],
+    loadTeams();
+    return () => {
+      cancelled = true;
     };
+  }, [typedUser.id]);
 
-    setMembers([...members, newMember]);
-    setIsAddDialogOpen(false);
-    setFormData({ name: "", email: "", role: "member" });
-    setIsLoading(false);
-    toast.success("팀원이 추가되었습니다", {
-      description: `${newMember.name}님에게 초대 이메일이 발송되었습니다.`,
-    });
-  };
+  // Reset states when team changes
+  useEffect(() => {
+    if (!teamId) return;
+    console.log(`[Team] Team changed to: ${teamId}, resetting states`);
+    setMembers([]);
+    setWorkflows([]);
+    setMyStatus(null);
+    setSearchQuery("");
+    setFilterStatus("all");
+  }, [teamId]);
 
-  // 팀원 수정
-  const handleEditMember = async () => {
-    if (!selectedMember || !validateForm(formData)) {
-      toast.error("입력값을 확인해주세요");
+  // Load team members
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+    async function loadMembers() {
+      try {
+        console.log(`[Team] Loading members for team: ${teamId}`);
+        const res = await fetch(`/api/teams/${teamId}/members`);
+        if (!res.ok) throw new Error("Failed to load members");
+        const json = await res.json();
+        if (!cancelled) {
+          setMembers(json.members || []);
+          const myMember = json.members?.find((m: TeamMember) => m.user_id === typedUser.id);
+          setMyStatus(myMember?.status || null);
+          console.log(`[Team] Set my status to: ${myMember?.status}`);
+        }
+      } catch (e) {
+        console.error("[Team] Failed to load members", e);
+        toast.error("팀원 목록을 불러오는데 실패했습니다");
+      }
+    }
+    loadMembers();
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, typedUser.id]);
+
+  // Load team workflows
+  useEffect(() => {
+    if (!teamId || myStatus !== "active") return;
+    let cancelled = false;
+    async function loadWorkflows() {
+      try {
+        console.log(`[Team] Loading workflows for team: ${teamId}, status: ${myStatus}`);
+        const res = await fetch(`/api/teams/${teamId}/workflows`);
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          console.error(`[Team] API Error: ${res.status}`, errorData);
+          throw new Error(errorData.error || `Failed to load workflows (${res.status})`);
+        }
+        const json = await res.json();
+        console.log(`[Team] Loaded workflows:`, json.workflows);
+        if (!cancelled) {
+          setWorkflows(json.workflows || []);
+        }
+      } catch (e) {
+        console.error("[Team] Failed to load workflows", e);
+        toast.error("워크플로우 목록을 불러오는데 실패했습니다");
+      }
+    }
+    loadWorkflows();
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, myStatus]);
+
+  // Create new team
+  async function handleCreateTeam() {
+    if (!newTeamName.trim()) {
+      toast.error("팀 이름을 입력해주세요");
+      return;
+    }
+
+    setIsCreatingTeam(true);
+    try {
+      const res = await fetch("/api/teams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          name: newTeamName.trim(),
+          description: newTeamDescription.trim() || null 
+        }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "팀 생성 실패");
+      }
+
+      const json = await res.json();
+      const newTeam = json.team;
+      
+      // Add new team to the list and select it
+      setTeams([newTeam, ...teams]);
+      setTeamId(newTeam.team_id);
+      
+      // Load members for the new team
+      try {
+        const membersRes = await fetch(`/api/teams/${newTeam.team_id}/members`);
+        if (membersRes.ok) {
+          const membersJson = await membersRes.json();
+          setMembers(membersJson.members || []);
+          const myMember = membersJson.members?.find((m: TeamMember) => m.user_id === typedUser.id);
+          setMyStatus(myMember?.status || null);
+        }
+      } catch (e) {
+        console.error("Failed to load members after team creation", e);
+      }
+      
+      toast.success("팀이 생성되었습니다");
+      setIsCreateTeamDialogOpen(false);
+      setNewTeamName("");
+      setNewTeamDescription("");
+    } catch (e: any) {
+      toast.error(e.message || "팀 생성에 실패했습니다");
+    } finally {
+      setIsCreatingTeam(false);
+    }
+  }
+
+  // Invite team member
+  async function handleInvite() {
+    if (!teamId || !inviteEmail) {
+      toast.error("이메일을 입력해주세요");
       return;
     }
 
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    try {
+      const res = await fetch(`/api/teams/${teamId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+      });
 
-    setMembers(
-      members.map((m) =>
-        m.id === selectedMember.id ? { ...m, ...formData } : m,
-      ),
-    );
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "초대 실패");
+      }
 
-    setIsEditDialogOpen(false);
-    setSelectedMember(null);
-    setFormData({ name: "", email: "", role: "member" });
-    setIsLoading(false);
-    toast.success("팀원 정보가 수정되었습니다");
-  };
+      const json = await res.json();
+      setInviteToken(json.token);
+      toast.success("초대 링크가 생성되었습니다");
+      
+      // Reload members
+      const membersRes = await fetch(`/api/teams/${teamId}/members`);
+      if (membersRes.ok) {
+        const membersJson = await membersRes.json();
+        setMembers(membersJson.members || []);
+      }
+    } catch (e: any) {
+      toast.error(e.message || "초대에 실패했습니다");
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
-  // 팀원 삭제
-  const handleDeleteMember = async () => {
-    if (!selectedMember) return;
+  // Copy invite link
+  function copyInviteLink() {
+    if (!inviteToken) return;
+    const link = `${window.location.origin}/work/invite/${inviteToken}`;
+    navigator.clipboard.writeText(link);
+    toast.success("초대 링크가 복사되었습니다");
+  }
 
-    setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
+  // Close invite dialog
+  function closeInviteDialog() {
+    setIsInviteDialogOpen(false);
+    setInviteEmail("");
+    setInviteRole("member");
+    setInviteToken(null);
+  }
 
-    setMembers(members.filter((m) => m.id !== selectedMember.id));
-    setIsDeleteDialogOpen(false);
-    setSelectedMember(null);
-    setIsLoading(false);
-    toast.success("팀원이 삭제되었습니다");
-  };
-
-  // 수정 다이얼로그 열기
-  const openEditDialog = (member: TeamMember) => {
-    setSelectedMember(member);
-    setFormData({
-      name: member.name,
-      email: member.email,
-      role: member.role,
-    });
-    setFormErrors({});
-    setIsEditDialogOpen(true);
-  };
-
-  // 삭제 다이얼로그 열기
-  const openDeleteDialog = (member: TeamMember) => {
+  // Open delete dialog
+  function openDeleteDialog(member: TeamMember) {
     setSelectedMember(member);
     setIsDeleteDialogOpen(true);
-  };
+  }
 
-  // 추가 다이얼로그 열기
-  const openAddDialog = () => {
-    setFormData({ name: "", email: "", role: "member" });
-    setFormErrors({});
-    setIsAddDialogOpen(true);
-  };
+  // Delete member
+  async function handleDelete() {
+    if (!selectedMember || !teamId) return;
 
-  // 역할 배지 색상
-  const getRoleBadgeVariant = (role: TeamMember["role"]) => {
-    switch (role) {
-      case "admin":
-        return "default";
-      case "member":
-        return "secondary";
-      default:
-        return "outline";
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/teams/${teamId}/members/${selectedMember.member_id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("삭제 실패");
+
+      toast.success("팀원이 삭제되었습니다");
+      setIsDeleteDialogOpen(false);
+      setSelectedMember(null);
+      
+      // Reload members
+      const membersRes = await fetch(`/api/teams/${teamId}/members`);
+      if (membersRes.ok) {
+        const membersJson = await membersRes.json();
+        setMembers(membersJson.members || []);
+      }
+    } catch (e: any) {
+      toast.error(e.message || "삭제에 실패했습니다");
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }
 
-  // 역할 한글명
-  const getRoleLabel = (role: TeamMember["role"]) => {
-    switch (role) {
-      case "admin":
-        return "관리자";
-      case "member":
-        return "사용자";
-    }
-  };
+  // Change member role
+  async function handleRoleChange(member: TeamMember, newRole: string) {
+    if (!teamId) return;
 
-  // 상태 배지
-  const getStatusBadge = (status: TeamMember["status"]) => {
-    switch (status) {
-      case "active":
-        return (
-          <Badge variant="outline" className="text-green-600">
-            <CheckCircle2 className="mr-1 size-3" />
-            활성
-          </Badge>
-        );
-      case "pending":
-        return (
-          <Badge variant="outline" className="text-yellow-600">
-            <Loader2 className="mr-1 size-3 animate-spin" />
-            대기중
-          </Badge>
-        );
-      case "inactive":
-        return (
-          <Badge variant="outline" className="text-gray-600">
-            비활성
-          </Badge>
-        );
+    try {
+      const res = await fetch(`/api/teams/${teamId}/members/${member.member_id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
+
+      if (!res.ok) throw new Error("역할 변경 실패");
+
+      toast.success("역할이 변경되었습니다");
+      
+      // Reload members
+      const membersRes = await fetch(`/api/teams/${teamId}/members`);
+      if (membersRes.ok) {
+        const membersJson = await membersRes.json();
+        setMembers(membersJson.members || []);
+      }
+    } catch (e: any) {
+      toast.error(e.message || "역할 변경에 실패했습니다");
     }
-  };
+  }
+
+  // Migrate workflows
+  async function handleMigrateWorkflows() {
+    if (!teamId) return;
+
+    setIsMigrating(true);
+    try {
+      const res = await fetch(`/api/teams/${teamId}/migrate-workflows`, {
+        method: "POST",
+      });
+
+      if (!res.ok) throw new Error("마이그레이션 실패");
+
+      const json = await res.json();
+      toast.success(`${json.migrated_count}개의 워크플로우가 이관되었습니다`);
+      setIsMigrateDialogOpen(false);
+      
+      // Reload workflows
+      const workflowsRes = await fetch(`/api/teams/${teamId}/workflows`);
+      if (workflowsRes.ok) {
+        const workflowsJson = await workflowsRes.json();
+        setWorkflows(workflowsJson.workflows || []);
+      }
+    } catch (e: any) {
+      toast.error(e.message || "마이그레이션에 실패했습니다");
+    } finally {
+      setIsMigrating(false);
+    }
+  }
+
+  // Open share dialog
+  async function openShareDialog(workflow: Workflow) {
+    setSelectedWorkflow(workflow);
+    setShareType("all");
+    setSelectedMembers([]);
+    
+    // Load current shares
+    try {
+      const res = await fetch(`/api/teams/${teamId}/workflows/${workflow.workflow_id}/shares`);
+      if (res.ok) {
+        const json = await res.json();
+        setWorkflowShares(json.shares || []);
+        if (json.shares && json.shares.length > 0) {
+          setShareType("specific");
+          setSelectedMembers(json.shares.map((s: WorkflowShare) => s.team_member_id));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load shares", e);
+    }
+    
+    setIsShareDialogOpen(true);
+  }
+
+  // Update workflow sharing
+  async function updateWorkflowSharing() {
+    if (!selectedWorkflow || !teamId) return;
+
+    try {
+      const res = await fetch(`/api/teams/${teamId}/workflows/${selectedWorkflow.workflow_id}/shares`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_ids: shareType === "all" ? [] : selectedMembers,
+        }),
+      });
+
+      if (!res.ok) throw new Error("공유 설정 실패");
+
+      toast.success("공유 설정이 업데이트되었습니다");
+      setIsShareDialogOpen(false);
+    } catch (e: any) {
+      toast.error(e.message || "공유 설정 업데이트에 실패했습니다");
+    }
+  }
+
+  // Verify team access
+  async function handleVerifyTeam() {
+    if (!teamId) return;
+
+    setIsVerifying(true);
+    try {
+      const res = await fetch(`/api/teams/${teamId}/verify`);
+      if (!res.ok) throw new Error("검증 실패");
+
+      const json = await res.json();
+      setVerificationResult(json);
+      toast.success("검증이 완료되었습니다");
+    } catch (e: any) {
+      toast.error(e.message || "검증에 실패했습니다");
+    } finally {
+      setIsVerifying(false);
+    }
+  }
 
   return (
-    <div className="container mx-auto max-w-7xl p-6">
-      {/* 헤더 */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="mb-2 text-3xl font-bold">팀원관리</h1>
-            <p className="text-muted-foreground">
-              팀원을 초대하고 역할을 관리하세요
-            </p>
-          </div>
-          <Button size="lg" onClick={openAddDialog}>
-            <UserPlus className="mr-2 size-4" />
-            팀원 초대
+    <div className="container mx-auto max-w-7xl space-y-6 p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">팀원 관리</h1>
+          <p className="text-muted-foreground mt-1">
+            팀원을 초대하고 워크플로우를 공유하세요
+          </p>
+        </div>
+      </div>
+
+      {/* Team Selection */}
+      {teams.length === 0 ? (
+        <Card className="p-12 text-center">
+          <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+          <h3 className="mb-2 text-lg font-semibold">팀이 없습니다</h3>
+          <p className="mb-4 text-sm text-muted-foreground">
+            새로운 팀을 생성하고 팀원들을 초대하여 협업을 시작하세요.
+          </p>
+          <Button onClick={() => setIsCreateTeamDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            첫 팀 생성하기
           </Button>
-        </div>
-      </div>
-
-      {/* 통계 카드 */}
-      <div className="mb-6 grid gap-4 md:grid-cols-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-primary/10 rounded-full p-3">
-              <Users className="text-primary size-5" />
-            </div>
-            <div>
-              <p className="text-muted-foreground text-sm">전체 팀원</p>
-              <p className="text-2xl font-bold">{members.length}</p>
-            </div>
-          </div>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-full bg-green-100 p-3 dark:bg-green-950">
-              <CheckCircle2 className="size-5 text-green-600 dark:text-green-400" />
+      ) : (
+        <Card className="p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex-1">
+              <Label htmlFor="team-select" className="text-base font-semibold">
+                팀 선택
+              </Label>
+              <div className="mt-2 flex gap-2">
+                <Select value={teamId} onValueChange={setTeamId}>
+                  <SelectTrigger id="team-select" className="flex-1">
+                    <SelectValue placeholder="팀을 선택하세요" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teams.map((team) => (
+                      <SelectItem key={team.team_id} value={team.team_id}>
+                        {team.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsCreateTeamDialogOpen(true)}
+                  className="shrink-0"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  새 팀
+                </Button>
+              </div>
             </div>
-            <div>
-              <p className="text-muted-foreground text-sm">활성 사용자</p>
-              <p className="text-2xl font-bold">
-                {members.filter((m) => m.status === "active").length}
-              </p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-full bg-yellow-100 p-3 dark:bg-yellow-950">
-              <Loader2 className="size-5 text-yellow-600 dark:text-yellow-400" />
-            </div>
-            <div>
-              <p className="text-muted-foreground text-sm">대기중</p>
-              <p className="text-2xl font-bold">
-                {members.filter((m) => m.status === "pending").length}
-              </p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-full bg-blue-100 p-3 dark:bg-blue-950">
-              <Mail className="size-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <p className="text-muted-foreground text-sm">관리자</p>
-              <p className="text-2xl font-bold">
-                {members.filter((m) => m.role === "admin").length}
-              </p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* 검색 및 필터 */}
-      <Card className="mb-6 p-4">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="relative flex-1">
-            <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-            <Input
-              placeholder="이름 또는 이메일로 검색..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <Select value={filterRole} onValueChange={setFilterRole}>
-            <SelectTrigger className="w-full md:w-[200px]">
-              <SelectValue placeholder="역할 필터" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체 역할</SelectItem>
-              <SelectItem value="admin">관리자</SelectItem>
-              <SelectItem value="member">사용자</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </Card>
-
-      {/* 팀원 목록 테이블 */}
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>이름</TableHead>
-              <TableHead>이메일</TableHead>
-              <TableHead>역할</TableHead>
-              <TableHead>상태</TableHead>
-              <TableHead>가입일</TableHead>
-              <TableHead className="text-right">작업</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredMembers.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center">
-                  <div className="flex flex-col items-center gap-2">
-                    <Users className="text-muted-foreground size-8" />
-                    <p className="text-muted-foreground">
-                      {searchQuery || filterRole !== "all"
-                        ? "검색 결과가 없습니다"
-                        : "팀원이 없습니다"}
-                    </p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredMembers.map((member) => (
-                <TableRow key={member.id}>
-                  <TableCell className="font-medium">{member.name}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {member.email}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getRoleBadgeVariant(member.role)}>
-                      {getRoleLabel(member.role)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{getStatusBadge(member.status)}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {member.joinedAt}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreVertical className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => openEditDialog(member)}
-                        >
-                          <Pencil className="mr-2 size-4" />
-                          수정
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => openDeleteDialog(member)}
-                          className="text-red-600"
-                        >
-                          <Trash2 className="mr-2 size-4" />
-                          삭제
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
+          <div className="flex items-center gap-2">
+            {myRole && (
+              <Badge variant="outline" className="text-sm">
+                {myRole === "owner" ? "소유자" : myRole === "admin" ? "관리자" : "사용자"}
+              </Badge>
             )}
-          </TableBody>
-        </Table>
+            {myStatus && (
+              <Badge
+                variant={myStatus === "active" ? "default" : "secondary"}
+                className="text-sm"
+              >
+                {myStatus === "active" ? "활동 중" : myStatus === "pending" ? "대기 중" : "제외됨"}
+              </Badge>
+            )}
+          </div>
+        </div>
+        {isAdmin && (
+          <div className="mt-4 flex gap-2">
+            <Button onClick={() => setIsInviteDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              팀원 초대
+            </Button>
+            {myStatus === "active" && (
+              <Button variant="outline" onClick={handleVerifyTeam} disabled={isVerifying}>
+                <Shield className="mr-2 h-4 w-4" />
+                {isVerifying ? "검증 중..." : "접근 권한 검증"}
+              </Button>
+            )}
+          </div>
+        )}
       </Card>
+      )}
 
-      {/* 팀원 추가 다이얼로그 */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent>
+      {/* Status Alert */}
+      {teamId && myStatus && myStatus !== "active" && (
+        <Alert className="mb-6">
+          {myStatus === "pending" ? (
+            <>
+              <Mail className="h-4 w-4" />
+              <AlertDescription>
+                <strong>초대 대기 중입니다.</strong> 이메일로 받은 초대 링크를 통해 팀 가입을 완료해주세요. 
+                초대 링크가 없다면 팀 관리자에게 문의하세요.
+              </AlertDescription>
+            </>
+          ) : (
+            <>
+              <X className="h-4 w-4" />
+              <AlertDescription>
+                <strong>팀에서 제외되었습니다.</strong> 팀 활동에 참여할 수 없습니다. 
+                팀 관리자에게 재초대를 요청하세요.
+              </AlertDescription>
+            </>
+          )}
+        </Alert>
+      )}
+
+      {/* Statistics */}
+      {teamId && (
+        <div className="mb-6 grid gap-4 md:grid-cols-3">
+          <Card className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-blue-100 p-3">
+                <Users className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">전체 팀원</p>
+                <p className="text-2xl font-bold">{members.length}</p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-green-100 p-3">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">활동 중</p>
+                <p className="text-2xl font-bold">
+                  {members.filter((m) => m.status === "active").length}
+                </p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-yellow-100 p-3">
+                <Mail className="h-5 w-5 text-yellow-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">대기 중</p>
+                <p className="text-2xl font-bold">
+                  {members.filter((m) => m.status === "pending").length}
+                </p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Team Members Section */}
+      {teamId && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">팀원 목록</h3>
+                <p className="text-sm text-muted-foreground">
+                  이 팀의 모든 팀원 목록입니다
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">
+                  {members.length}명
+                </Badge>
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsInviteDialogOpen(true)}
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    팀원 초대
+                  </Button>
+                )}
+              </div>
+            </div>
+            {/* Search and Filter */}
+            <div className="mt-4 flex flex-col gap-4 md:flex-row">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="이메일로 검색..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="상태 필터" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체 상태</SelectItem>
+                  <SelectItem value="active">활동 중</SelectItem>
+                  <SelectItem value="pending">대기 중</SelectItem>
+                  <SelectItem value="inactive">제외됨</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {filteredMembers.length === 0 ? (
+              <div className="py-8 text-center">
+                <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                <h4 className="mb-2 text-lg font-semibold">팀원이 없습니다</h4>
+                <p className="text-sm text-muted-foreground">
+                  {searchQuery || filterStatus !== "all"
+                    ? "검색 조건에 맞는 팀원이 없습니다"
+                    : "이 팀에는 아직 팀원이 없습니다"}
+                </p>
+                {!searchQuery && filterStatus === "all" && isAdmin && (
+                  <Button
+                    className="mt-4"
+                    onClick={() => setIsInviteDialogOpen(true)}
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    첫 팀원 초대하기
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>이메일</TableHead>
+                      <TableHead>역할</TableHead>
+                      <TableHead>상태</TableHead>
+                      <TableHead>초대일</TableHead>
+                      <TableHead>가입일</TableHead>
+                      <TableHead className="text-right">작업</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredMembers.map((member) => (
+                      <TableRow key={member.member_id}>
+                        <TableCell className="font-medium">
+                          {member.email}
+                        </TableCell>
+                        <TableCell>
+                          {isAdmin && member.role !== "owner" ? (
+                            <Select
+                              value={member.role}
+                              onValueChange={(val) => handleRoleChange(member, val)}
+                              disabled={!isAdmin}
+                            >
+                              <SelectTrigger className="w-[100px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="admin">관리자</SelectItem>
+                                <SelectItem value="member">사용자</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge variant="outline">
+                              {member.role === "owner"
+                                ? "소유자"
+                                : member.role === "admin"
+                                  ? "관리자"
+                                  : "사용자"}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              member.status === "active"
+                                ? "default"
+                                : member.status === "pending"
+                                  ? "secondary"
+                                  : "outline"
+                            }
+                          >
+                            {member.status === "active"
+                              ? "활동 중"
+                              : member.status === "pending"
+                                ? "대기 중"
+                                : "제외됨"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(member.invited_at).toLocaleDateString("ko-KR")}
+                        </TableCell>
+                        <TableCell>
+                          {member.joined_at
+                            ? new Date(member.joined_at).toLocaleDateString("ko-KR")
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {isAdmin && member.role !== "owner" && member.status !== "inactive" && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={() => openDeleteDialog(member)}
+                                >
+                                  <X className="mr-2 h-4 w-4" />
+                                  팀에서 제외
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Team Workflows Section */}
+      {teamId && myStatus === "active" && (
+        <Card>
+         
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">팀 워크플로우</h3>
+                <p className="text-sm text-muted-foreground">
+                  이 팀의 모든 워크플로우 목록입니다
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">
+                  {workflows.length}개
+                </Badge>
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsMigrateDialogOpen(true)}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    워크플로우 이관
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {workflows.length === 0 ? (
+              <div className="py-8 text-center">
+                <LinkIcon className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                <h4 className="mb-2 text-lg font-semibold">워크플로우가 없습니다</h4>
+                <p className="text-sm text-muted-foreground">
+                  이 팀에는 아직 워크플로우가 없습니다.
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  참고: 업무프로세스 페이지에서 워크플로우를 생성한 후 
+                  "워크플로우 이관" 기능으로 이 팀에 추가할 수 있습니다.
+                </p>
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    className="mt-4"
+                    onClick={() => setIsMigrateDialogOpen(true)}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    워크플로우 이관하기
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="max-h-96 space-y-3 overflow-y-auto">
+                {workflows.map((workflow) => (
+                  <div
+                    key={workflow.workflow_id}
+                    className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/50"
+                  >
+                    <div className="flex-1">
+                      <h4 className="font-medium">{workflow.title}</h4>
+                      {workflow.description && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {workflow.description}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-4 mt-2">
+                        <Badge variant="outline" className="text-xs">
+                          {workflow.status}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          생성: {new Date(workflow.created_at).toLocaleDateString("ko-KR")}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                      >
+                        <Link to="/work/business-logic">
+                          <ArrowRight className="mr-2 h-4 w-4" />
+                          열기
+                        </Link>
+                      </Button>
+                      {isAdmin && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openShareDialog(workflow)}
+                        >
+                          <Share2 className="mr-2 h-4 w-4" />
+                          공유
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Invite Dialog */}
+      <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>팀원 초대</DialogTitle>
             <DialogDescription>
-              새로운 팀원을 초대하세요. 초대 이메일이 발송됩니다.
+              이메일로 팀원을 초대하고 역할을 지정하세요.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="add-name">이름</Label>
+              <Label htmlFor="email">이메일</Label>
               <Input
-                id="add-name"
-                placeholder="홍길동"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-              />
-              {formErrors.name && (
-                <p className="text-sm text-red-600">{formErrors.name}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="add-email">이메일</Label>
-              <Input
-                id="add-email"
+                id="email"
                 type="email"
-                placeholder="hong@example.com"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
+                placeholder="example@email.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
               />
-              {formErrors.email && (
-                <p className="text-sm text-red-600">{formErrors.email}</p>
-              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="add-role">역할</Label>
-              <Select
-                value={formData.role}
-                onValueChange={(value: TeamMemberFormData["role"]) =>
-                  setFormData({ ...formData, role: value })
-                }
-              >
-                <SelectTrigger id="add-role">
+              <Label htmlFor="role">역할</Label>
+              <Select value={inviteRole} onValueChange={setInviteRole}>
+                <SelectTrigger id="role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">관리자</SelectItem>
                   <SelectItem value="member">사용자</SelectItem>
+                  <SelectItem value="admin">관리자</SelectItem>
                 </SelectContent>
               </Select>
-              {formErrors.role && (
-                <p className="text-sm text-red-600">{formErrors.role}</p>
-              )}
             </div>
+            {inviteToken && (
+              <div className="space-y-2">
+                <Label>초대 링크</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={`${window.location.origin}/work/invite/${inviteToken}`}
+                    readOnly
+                    className="text-sm"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={copyInviteLink}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  이 링크를 초대할 팀원에게 전송하세요.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setIsAddDialogOpen(false)}
+              onClick={closeInviteDialog}
               disabled={isLoading}
             >
-              취소
+              {inviteToken ? "완료" : "취소"}
             </Button>
-            <Button onClick={handleAddMember} disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  초대중...
-                </>
-              ) : (
-                <>
-                  <Plus className="mr-2 size-4" />
-                  초대하기
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 팀원 수정 다이얼로그 */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>팀원 정보 수정</DialogTitle>
-            <DialogDescription>팀원의 정보를 수정하세요.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-name">이름</Label>
-              <Input
-                id="edit-name"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-              />
-              {formErrors.name && (
-                <p className="text-sm text-red-600">{formErrors.name}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-email">이메일</Label>
-              <Input
-                id="edit-email"
-                type="email"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
-              />
-              {formErrors.email && (
-                <p className="text-sm text-red-600">{formErrors.email}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-role">역할</Label>
-              <Select
-                value={formData.role}
-                onValueChange={(value: TeamMemberFormData["role"]) =>
-                  setFormData({ ...formData, role: value })
-                }
+            {!inviteToken && (
+              <Button
+                onClick={handleInvite}
+                disabled={isLoading || !inviteEmail}
               >
-                <SelectTrigger id="edit-role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">관리자</SelectItem>
-                  <SelectItem value="member">사용자</SelectItem>
-                </SelectContent>
-              </Select>
-              {formErrors.role && (
-                <p className="text-sm text-red-600">{formErrors.role}</p>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsEditDialogOpen(false)}
-              disabled={isLoading}
-            >
-              취소
-            </Button>
-            <Button onClick={handleEditMember} disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  수정중...
-                </>
-              ) : (
-                "수정하기"
-              )}
-            </Button>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    초대 중...
+                  </>
+                ) : (
+                  "초대하기"
+                )}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* 팀원 삭제 확인 다이얼로그 */}
+      {/* Delete Member Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>팀원 삭제</DialogTitle>
+            <DialogTitle>팀원 제외</DialogTitle>
             <DialogDescription>
-              정말로 <strong>{selectedMember?.name}</strong>님을 팀에서
-              삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+              선택한 팀원을 팀에서 제외하시겠습니까? 이 작업은 되돌릴 수 없습니다.
             </DialogDescription>
           </DialogHeader>
+          {selectedMember && (
+            <div className="py-4">
+              <p className="text-sm font-medium">{selectedMember.email}</p>
+              <p className="text-xs text-muted-foreground">
+                {selectedMember.role === "owner"
+                  ? "소유자"
+                  : selectedMember.role === "admin"
+                    ? "관리자"
+                    : "사용자"} · 
+                {selectedMember.status === "active"
+                  ? "활동 중"
+                  : selectedMember.status === "pending"
+                    ? "대기 중"
+                    : "제외됨"}
+              </p>
+            </div>
+          )}
           <DialogFooter>
             <Button
               variant="outline"
@@ -660,19 +1093,274 @@ export default function TeamManagement() {
             </Button>
             <Button
               variant="destructive"
-              onClick={handleDeleteMember}
+              onClick={handleDelete}
               disabled={isLoading}
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  삭제중...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  제외 중...
                 </>
               ) : (
+                "팀에서 제외"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Migrate Workflows Dialog */}
+      <Dialog open={isMigrateDialogOpen} onOpenChange={setIsMigrateDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>워크플로우 이관</DialogTitle>
+            <DialogDescription>
+              기존 워크플로우를 이 팀으로 이관합니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                팀 소유자의 모든 미소속 워크플로우가 이 팀으로 이관됩니다.
+                이 작업은 되돌릴 수 없습니다.
+              </AlertDescription>
+            </Alert>
+            <div className="text-sm">
+              <p>이관될 워크플로우:</p>
+              <p className="font-medium">팀 소유자의 모든 개인 워크플로우</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsMigrateDialogOpen(false)}
+              disabled={isMigrating}
+            >
+              취소
+            </Button>
+            <Button
+              onClick={handleMigrateWorkflows}
+              disabled={isMigrating}
+            >
+              {isMigrating ? (
                 <>
-                  <Trash2 className="mr-2 size-4" />
-                  삭제하기
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  이관 중...
                 </>
+              ) : (
+                "워크플로우 이관"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Share Workflow Dialog */}
+      <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>워크플로우 공유</DialogTitle>
+            <DialogDescription>
+              이 워크플로우를 특정 팀원에게만 공유하거나 전체 공유할 수 있습니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>공유 범위</Label>
+              <Select value={shareType} onValueChange={(val: "all" | "specific") => setShareType(val)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">팀 전체 공유</SelectItem>
+                  <SelectItem value="specific">특정 팀원만 공유</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {shareType === "specific" && (
+              <div className="space-y-2">
+                <Label>팀원 선택</Label>
+                <div className="max-h-40 space-y-2 overflow-y-auto">
+                  {members
+                    .filter((m) => m.status === "active")
+                    .map((member) => (
+                      <div key={member.member_id} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={member.member_id}
+                          checked={selectedMembers.includes(member.member_id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedMembers([...selectedMembers, member.member_id]);
+                            } else {
+                              setSelectedMembers(selectedMembers.filter((id) => id !== member.member_id));
+                            }
+                          }}
+                          className="rounded"
+                        />
+                        <Label htmlFor={member.member_id} className="text-sm">
+                          {member.email}
+                        </Label>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsShareDialogOpen(false)}
+            >
+              취소
+            </Button>
+            <Button onClick={updateWorkflowSharing}>
+              공유 설정 저장
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Verify Team Dialog */}
+      <Dialog open={isVerifyDialogOpen} onOpenChange={setIsVerifyDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>팀 접근 권한 검증</DialogTitle>
+            <DialogDescription>
+              팀원들의 워크플로우 접근 권한을 검증하고 문제점을 확인합니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {verificationResult ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{verificationResult.summary.total_members}</p>
+                    <p className="text-sm text-muted-foreground">전체 팀원</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{verificationResult.summary.members_with_access}</p>
+                    <p className="text-sm text-muted-foreground">접근 가능</p>
+                  </div>
+                </div>
+                
+                {verificationResult.recommendations.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-2">권장 사항</h4>
+                    <ul className="space-y-1 text-sm text-muted-foreground">
+                      {verificationResult.recommendations.map((rec, idx) => (
+                        <li key={idx}>• {rec}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {verificationResult.member_access.some(m => m.issues.length > 0) && (
+                  <div>
+                    <h4 className="font-medium mb-2">문제점</h4>
+                    <div className="space-y-2">
+                      {verificationResult.member_access
+                        .filter(m => m.issues.length > 0)
+                        .map((member) => (
+                          <div key={member.member_id} className="text-sm">
+                            <p className="font-medium">{member.email}</p>
+                            {member.issues.map((issue, idx) => (
+                              <p key={idx} className="text-destructive">• {issue}</p>
+                            ))}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="py-8 text-center">
+                <Shield className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  검증을 시작하면 팀원들의 워크플로우 접근 권한을 분석합니다.
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsVerifyDialogOpen(false)}
+            >
+              닫기
+            </Button>
+            {!verificationResult && (
+              <Button onClick={handleVerifyTeam} disabled={isVerifying}>
+                {isVerifying ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    검증 중...
+                  </>
+                ) : (
+                  "검증 시작"
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Team Dialog */}
+      <Dialog open={isCreateTeamDialogOpen} onOpenChange={setIsCreateTeamDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>새 팀 생성</DialogTitle>
+            <DialogDescription>
+              새로운 팀을 생성하고 팀 관리자가 됩니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="team-name">팀 이름 *</Label>
+              <Input
+                id="team-name"
+                placeholder="팀 이름을 입력하세요"
+                value={newTeamName}
+                onChange={(e) => setNewTeamName(e.target.value)}
+                disabled={isCreatingTeam}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="team-description">팀 설명</Label>
+              <Textarea
+                id="team-description"
+                placeholder="팀에 대한 간단한 설명을 입력하세요 (선택사항)"
+                value={newTeamDescription}
+                onChange={(e) => setNewTeamDescription(e.target.value)}
+                disabled={isCreatingTeam}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCreateTeamDialogOpen(false);
+                setNewTeamName("");
+                setNewTeamDescription("");
+              }}
+              disabled={isCreatingTeam}
+            >
+              취소
+            </Button>
+            <Button
+              onClick={handleCreateTeam}
+              disabled={isCreatingTeam || !newTeamName.trim()}
+            >
+              {isCreatingTeam ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  생성 중...
+                </>
+              ) : (
+                "팀 생성"
               )}
             </Button>
           </DialogFooter>

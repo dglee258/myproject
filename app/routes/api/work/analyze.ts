@@ -10,7 +10,8 @@ import db from "~/core/db/drizzle-client.server";
 import { workVideos } from "~/features/work/upload/schema";
 import { workWorkflows } from "~/features/work/business-logic/schema";
 import { workWorkflowMembers } from "~/features/work/team-management/schema";
-import { eq } from "drizzle-orm";
+import { workTeamMembers } from "~/features/work/team-management/team-schema";
+import { eq, isNull, and, sql } from "drizzle-orm";
 import makeServerClient from "~/core/lib/supa-client.server";
 import { analyzeVideoInBackground } from "~/features/work/services/video-analyzer.server";
 
@@ -44,7 +45,28 @@ export async function action({ request }: Route.ActionArgs) {
       return Response.json({ error: "Forbidden" }, { status: 403, headers });
     }
 
-    // 워크플로우 생성
+    // 사용자의 활성 팀 찾기 (우선순위: owner > admin > member)
+    const [activeTeam] = await db
+      .select({
+        team_id: workTeamMembers.team_id,
+        role: workTeamMembers.role,
+      })
+      .from(workTeamMembers)
+      .where(
+        and(
+          eq(workTeamMembers.user_id, user.id),
+          eq(workTeamMembers.status, "active" as any),
+        ),
+      )
+      .orderBy(
+        // 우선순위: owner > admin > member
+        sql`CASE WHEN ${workTeamMembers.role} = 'owner' THEN 1 
+              WHEN ${workTeamMembers.role} = 'admin' THEN 2 
+              ELSE 3 END`
+      )
+      .limit(1);
+
+    // 워크플로우 생성 (팀이 있으면 팀에 소속)
     const [workflow] = await db
       .insert(workWorkflows)
       .values({
@@ -56,17 +78,20 @@ export async function action({ request }: Route.ActionArgs) {
         thumbnail_url: video.thumbnail_url,
         status: "analyzing",
         requested_at: new Date(),
+        team_id: activeTeam?.team_id || null,
       })
       .returning();
 
-    // 생성자를 admin 멤버로 자동 추가
-    await db.insert(workWorkflowMembers).values({
-      workflow_id: workflow.workflow_id,
-      user_id: user.id,
-      role: "admin",
-      status: "active",
-      joined_at: new Date(),
-    });
+    // 레거시 호환성: 생성자를 admin 멤버로 자동 추가 (팀 기반 시스템에서는 필요 없음)
+    if (!activeTeam) {
+      await db.insert(workWorkflowMembers).values({
+        workflow_id: workflow.workflow_id,
+        user_id: user.id,
+        role: "admin",
+        status: "active",
+        joined_at: new Date(),
+      });
+    }
 
     // 비디오 상태 업데이트
     await db

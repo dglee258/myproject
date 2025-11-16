@@ -25,7 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
-import { Link, useFetcher, useRevalidator, data, useNavigate } from "react-router";
+import { Link, useFetcher, useRevalidator, data, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 import { Badge } from "~/core/components/ui/badge";
@@ -144,6 +144,8 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const teamId = searchParams.get("teamId");
   
   // Transform database workflows to VideoAnalysis format (메모이제이션)
   const mockVideos: VideoAnalysis[] = useMemo(() => dbWorkflows.map((workflow: any) => {
@@ -312,7 +314,8 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
             className="w-full sm:w-auto sm:shrink-0"
             onClick={() => {
               console.log('Upload button clicked');
-              navigate('/work/upload');
+              const uploadUrl = teamId ? `/work/upload?teamId=${teamId}` : '/work/upload';
+              navigate(uploadUrl);
             }}
           >
             <Plus className="mr-2 size-4" />

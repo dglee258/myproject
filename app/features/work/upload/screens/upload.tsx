@@ -8,7 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useSearchParams } from "react-router";
 
 import { Button } from "~/core/components/ui/button";
 import { Progress } from "~/core/components/ui/progress";
@@ -45,6 +45,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export default function Upload() {
   const { user } = useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
+  const teamId = searchParams.get("teamId");
   const [videoFile, setVideoFile] = useState<VideoFile | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -130,10 +132,15 @@ export default function Upload() {
 
       // 3) 분석 시작
       setVideoFile((prev) => (prev ? { ...prev, status: "processing", progress: 0 } : null));
+      const analyzeBody: any = { video_id };
+      if (teamId) {
+        analyzeBody.team_id = teamId;
+      }
+      
       const analyzeRes = await fetch("/api/work/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ video_id }),
+        body: JSON.stringify(analyzeBody),
       });
       if (!analyzeRes.ok) {
         const j = await analyzeRes.json().catch(() => ({}));
@@ -146,7 +153,10 @@ export default function Upload() {
       setVideoFile((prev) => (prev ? { ...prev, status: "completed", progress: 100 } : null));
 
       // 5) 결과 페이지로 이동
-      window.location.href = `/work/business-logic?workflow=${workflow_id}`;
+      const resultUrl = teamId 
+        ? `/work/business-logic?workflow=${workflow_id}&teamId=${teamId}`
+        : `/work/business-logic?workflow=${workflow_id}`;
+      window.location.href = resultUrl;
     } catch (error: any) {
       console.error("Upload error:", error);
       setVideoFile((prev) =>
