@@ -157,6 +157,9 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   
+  // 현재 선택된 팀 정보
+  const selectedTeam = teams.find(team => team.team_id === teamId);
+  
   // Dialog states
   const [isCreateTeamDialogOpen, setIsCreateTeamDialogOpen] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
@@ -666,64 +669,112 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
         </Card>
       ) : (
         <Card className="p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex-1">
-              <Label htmlFor="team-select" className="text-base font-semibold">
-                팀 선택
-              </Label>
-              <div className="mt-2 flex gap-2">
-                <Select value={teamId} onValueChange={setTeamId}>
-                  <SelectTrigger id="team-select" className="flex-1">
-                    <SelectValue placeholder="팀을 선택하세요" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teams.map((team) => (
-                      <SelectItem key={team.team_id} value={team.team_id}>
-                        {team.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="outline"
-                  onClick={() => setIsCreateTeamDialogOpen(true)}
-                  className="shrink-0"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  새 팀
-                </Button>
+          <div className="space-y-4">
+            {/* 팀 선택 섹션 헤더 */}
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="team-select" className="text-base font-semibold">
+                  팀 선택
+                </Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  관리할 팀을 선택하세요
+                </p>
+              </div>
+              
+              {/* 사용자 정보 배지 */}
+              <div className="flex items-center gap-2">
+                {myRole && (
+                  <Badge variant="outline" className="text-sm">
+                    {myRole === "owner" ? "소유자" : myRole === "admin" ? "관리자" : "사용자"}
+                  </Badge>
+                )}
+                {myStatus && (
+                  <Badge
+                    variant={myStatus === "active" ? "default" : "secondary"}
+                    className="text-sm"
+                  >
+                    {myStatus === "active" ? "활동 중" : myStatus === "pending" ? "초대 대기" : "비활성"}
+                  </Badge>
+                )}
               </div>
             </div>
-          <div className="flex items-center gap-2">
-            {myRole && (
-              <Badge variant="outline" className="text-sm">
-                {myRole === "owner" ? "소유자" : myRole === "admin" ? "관리자" : "사용자"}
-              </Badge>
-            )}
-            {myStatus && (
-              <Badge
-                variant={myStatus === "active" ? "default" : "secondary"}
-                className="text-sm"
+
+            {/* 팀 선택 컨트롤 */}
+            <div className="flex gap-2">
+              <Select value={teamId} onValueChange={setTeamId}>
+                <SelectTrigger id="team-select" className="flex-1">
+                  <SelectValue placeholder="팀을 선택하세요" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teams.map((team) => (
+                    <SelectItem key={team.team_id} value={team.team_id}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                        {team.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                onClick={() => setIsCreateTeamDialogOpen(true)}
+                className="shrink-0"
               >
-                {myStatus === "active" ? "활동 중" : myStatus === "pending" ? "대기 중" : "제외됨"}
-              </Badge>
-            )}
-          </div>
-        </div>
-        {isAdmin && (
-          <div className="mt-4 flex gap-2">
-            <Button onClick={() => setIsInviteDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              팀원 초대
-            </Button>
-            {myStatus === "active" && (
-              <Button variant="outline" onClick={handleVerifyTeam} disabled={isVerifying}>
-                <Shield className="mr-2 h-4 w-4" />
-                {isVerifying ? "검증 중..." : "접근 권한 검증"}
+                <Plus className="mr-2 h-4 w-4" />
+                새 팀 생성
               </Button>
+            </div>
+
+            {/* 선택된 팀 정보 */}
+            {selectedTeam && (
+              <div className="bg-muted/50 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <Users className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">{selectedTeam.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedTeam.description || "팀 설명이 없습니다"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">팀원 수</p>
+                    <p className="text-sm font-medium">{members.length}명</p>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
-        )}
+        {/* 관리자 기능 섹션 */}
+            {isAdmin && (
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-sm font-medium">팀 관리</p>
+                    <p className="text-xs text-muted-foreground">팀원 초대 및 권한 관리</p>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">
+                    관리자 기능
+                  </Badge>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={() => setIsInviteDialogOpen(true)} className="flex-1">
+                    <Plus className="mr-2 h-4 w-4" />
+                    팀원 초대
+                  </Button>
+                  {myStatus === "active" && (
+                    <Button variant="outline" onClick={handleVerifyTeam} disabled={isVerifying}>
+                      <Shield className="mr-2 h-4 w-4" />
+                      {isVerifying ? "검증 중..." : "권한 검증"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
       </Card>
       )}
 

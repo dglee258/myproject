@@ -29,6 +29,20 @@
       "when": 1762504708766,
       "tag": "0003_outstanding_toad",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1763340569946,
+      "tag": "0004_amusing_rattler",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1763340710938,
+      "tag": "0005_perpetual_lucky_pierre",
+      "breakpoints": true
     }
   ]
 }

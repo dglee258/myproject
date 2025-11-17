@@ -54,12 +54,24 @@ export const workWorkflows = pgTable(
     ...timestamps,
   },
   (t) => [
-    pgPolicy("select-workflows", {
+    pgPolicy("workflow-owner-full-access", {
+      for: "all",
+      to: authenticatedRole,
+      as: "permissive",
+      using: sql`${authUid} = ${t.owner_id}`,
+      withCheck: sql`${authUid} = ${t.owner_id}`,
+    }),
+    pgPolicy("team-members-access-workflows", {
       for: "select",
       to: authenticatedRole,
       as: "permissive",
       using: sql`
-        ${authUid} = ${t.owner_id}
+        ${t.team_id} IS NOT NULL 
+        AND EXISTS (
+          SELECT 1 FROM work_team_members tm
+          WHERE tm.team_id = ${t.team_id}
+            AND tm.user_id = ${authUid}
+            AND tm.status = 'active'
         OR (
           ${t.team_id} IS NOT NULL 
           AND EXISTS (
@@ -101,7 +113,8 @@ export const workAnalysisSteps = pgTable(
     ...timestamps,
   },
   (t) => [
-    pgPolicy("select-steps", {
+    // RLS Policy: 워크플로우 접근 권한에 따라 스텝 접근 제어
+    pgPolicy("workflow-based-step-access", {
       for: "select",
       to: authenticatedRole,
       as: "permissive",
@@ -111,13 +124,43 @@ export const workAnalysisSteps = pgTable(
           WHERE w.workflow_id = ${t.workflow_id}
             AND (
               ${authUid} = w.owner_id
-              OR EXISTS (
-                SELECT 1 FROM work_workflow_members m
-                WHERE m.workflow_id = w.workflow_id
-                  AND m.user_id = ${authUid}
-                  AND m.status = 'active'
+              OR (
+                w.team_id IS NOT NULL 
+                AND EXISTS (
+                  SELECT 1 FROM work_team_members tm
+                  WHERE tm.team_id = w.team_id
+                    AND tm.user_id = ${authUid}
+                    AND tm.status = 'active'
+                )
               )
             )
+            OR EXISTS (
+              SELECT 1 FROM work_workflow_members m
+              WHERE m.workflow_id = w.workflow_id
+                AND m.user_id = ${authUid}
+                AND m.status = 'active'
+            )
+          )
+        )
+      `,
+    }),
+    // RLS Policy: 워크플로우 소유자는 스텝 수정 가능
+    pgPolicy("workflow-owner-edit-steps", {
+      for: "update",
+      to: authenticatedRole,
+      as: "permissive",
+      using: sql`
+        EXISTS (
+          SELECT 1 FROM work_workflows w
+          WHERE w.workflow_id = ${t.workflow_id}
+            AND w.owner_id = ${authUid}
+        )
+      `,
+      withCheck: sql`
+        EXISTS (
+          SELECT 1 FROM work_workflows w
+          WHERE w.workflow_id = ${t.workflow_id}
+            AND w.owner_id = ${authUid}
         )
       `,
     }),
