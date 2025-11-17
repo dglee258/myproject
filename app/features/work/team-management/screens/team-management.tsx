@@ -5,6 +5,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Copy,
+  Eye,
   Link as LinkIcon,
   Loader2,
   Mail,
@@ -58,6 +59,7 @@ import {
   TableRow,
 } from "~/core/components/ui/table";
 import { Textarea } from "~/core/components/ui/textarea";
+import { Checkbox } from "~/core/components/ui/checkbox";
 import makeServerClient from "~/core/lib/supa-client.server";
 
 export function meta({}: Route.MetaArgs) {
@@ -71,6 +73,8 @@ export function meta({}: Route.MetaArgs) {
 interface Team {
   team_id: string;
   name: string;
+  description: string | null;
+  created_at: string;
   owner_id: string;
 }
 
@@ -88,16 +92,14 @@ interface Workflow {
   workflow_id: number;
   title: string;
   description: string | null;
-  status: string;
-  created_at: string;
+  status: "analyzed" | "analyzing" | "pending";
+  created_at: Date | string;
   team_id: string | null;
-}
-
-interface WorkflowShare {
-  share_id: string;
-  workflow_id: number;
-  team_member_id: string;
-  shared_by: string;
+  owner_id: string | null;
+  thumbnail_url: string | null;
+  duration_seconds: number | null;
+  steps?: any[];
+  sourceVideo?: any;
 }
 
 interface VerificationResult {
@@ -131,7 +133,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export default function TeamManagement({ loaderData }: Route.ComponentProps) {
-  const user = loaderData?.user;
+  const user = loaderData?.user as {
+    id: string;
+    email: string | null;
+  } & Record<string, any> | null;
   
   if (!user) {
     return <div>인증되지 않았습니다.</div>;
@@ -147,7 +152,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [teamId, setTeamId] = useState<string>("");
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [teamProcesses, setTeamProcesses] = useState<Workflow[]>([]);
   const [myStatus, setMyStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -157,6 +162,8 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
   const [newTeamName, setNewTeamName] = useState("");
   const [newTeamDescription, setNewTeamDescription] = useState("");
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
+  const [userWorkflows, setUserWorkflows] = useState<Workflow[]>([]);
+  const [selectedWorkflows, setSelectedWorkflows] = useState<string[]>([]);
   
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -167,13 +174,9 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   
   const [isMigrateDialogOpen, setIsMigrateDialogOpen] = useState(false);
-  const [isMigrating, setIsMigrating] = useState(false);
-  
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
-  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
-  const [workflowShares, setWorkflowShares] = useState<WorkflowShare[]>([]);
-  const [shareType, setShareType] = useState<"all" | "specific">("all");
-  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [isSharing, setIsSharing] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
   
   const [isVerifyDialogOpen, setIsVerifyDialogOpen] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -222,7 +225,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
     if (!teamId) return;
     console.log(`[Team] Team changed to: ${teamId}, resetting states`);
     setMembers([]);
-    setWorkflows([]);
+    setTeamProcesses([]);
     setMyStatus(null);
     setSearchQuery("");
     setFilterStatus("all");
@@ -271,11 +274,11 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
         const json = await res.json();
         console.log(`[Team] Loaded workflows:`, json.workflows);
         if (!cancelled) {
-          setWorkflows(json.workflows || []);
+          setTeamProcesses(json.workflows || []);
         }
       } catch (e) {
         console.error("[Team] Failed to load workflows", e);
-        toast.error("워크플로우 목록을 불러오는데 실패했습니다");
+        toast.error("팀 업무 프로세스 목록을 불러오는데 실패했습니다");
       }
     }
     loadWorkflows();
@@ -283,6 +286,49 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       cancelled = true;
     };
   }, [teamId, myStatus]);
+
+  // Load user's personal workflows
+  useEffect(() => {
+    let cancelled = false;
+    async function loadUserWorkflows() {
+      try {
+        console.log("[Team] Loading user workflows...");
+        console.log("[Team] typedUser:", typedUser);
+        
+        if (!typedUser) {
+          console.error("[Team] User not authenticated");
+          return;
+        }
+
+        // API 호출로 사용자 워크플로우 가져오기
+        console.log("[Team] Fetching from /api/work/workflows...");
+        const res = await fetch("/api/work/workflows");
+        console.log("[Team] Response status:", res.status);
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error("[Team] API error:", errorText);
+          throw new Error("Failed to load user workflows");
+        }
+        
+        const json = await res.json();
+        console.log("[Team] API response:", json);
+        console.log("[Team] User workflows loaded:", json.workflows);
+        console.log("[Team] Workflows count:", json.workflows?.length || 0);
+        
+        if (!cancelled) {
+          setUserWorkflows(json.workflows || []);
+          console.log("[Team] State updated with workflows");
+        }
+      } catch (e) {
+        console.error("[Team] Failed to load user workflows", e);
+      }
+    }
+    loadUserWorkflows();
+    return () => {
+      cancelled = true;
+    };
+  }, [typedUser]);
 
   // Create new team
   async function handleCreateTeam() {
@@ -296,9 +342,9 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       const res = await fetch("/api/teams", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           name: newTeamName.trim(),
-          description: newTeamDescription.trim() || null 
+          description: newTeamDescription.trim(),
         }),
       });
 
@@ -313,6 +359,26 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       // Add new team to the list and select it
       setTeams([newTeam, ...teams]);
       setTeamId(newTeam.team_id);
+      
+      // Share selected workflows with the new team
+      if (selectedWorkflows.length > 0) {
+        try {
+          const shareRes = await fetch(`/api/teams/${newTeam.team_id}/workflows/migrate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              workflow_ids: selectedWorkflows,
+            }),
+          });
+          
+          if (shareRes.ok) {
+            const shareJson = await shareRes.json();
+            toast.success(`${shareJson.migrated_count}개의 업무 프로세스가 팀에 공유되었습니다`);
+          }
+        } catch (e) {
+          console.error("Failed to share workflows with team", e);
+        }
+      }
       
       // Load members for the new team
       try {
@@ -331,6 +397,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       setIsCreateTeamDialogOpen(false);
       setNewTeamName("");
       setNewTeamDescription("");
+      setSelectedWorkflows([]);
     } catch (e: any) {
       toast.error(e.message || "팀 생성에 실패했습니다");
     } finally {
@@ -452,6 +519,78 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
     }
   }
 
+  // Share workflows with team
+  async function handleShareWorkflows() {
+    if (!teamId || selectedWorkflows.length === 0) {
+      toast.error("공유할 업무 프로세스를 선택해주세요");
+      return;
+    }
+
+    console.log("[Share] Team ID:", teamId);
+    console.log("[Share] Selected workflows:", selectedWorkflows);
+    console.log("[Share] User workflows available:", userWorkflows.map(w => ({ id: w.workflow_id, title: w.title, team_id: w.team_id })));
+
+    setIsSharing(true);
+    try {
+      const res = await fetch(`/api/teams/${teamId}/migrate-workflows`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workflow_ids: selectedWorkflows,
+        }),
+      });
+
+      console.log("[Share] Response status:", res.status);
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("[Share] API error:", errorText);
+        throw new Error("공유 실패");
+      }
+
+      const json = await res.json();
+      console.log("[Share] API response:", json);
+      toast.success(`${json.migrated_count}개의 업무 프로세스가 팀에 공유되었습니다`);
+      setIsShareDialogOpen(false);
+      setSelectedWorkflows([]);
+      
+      // Reload team workflows
+      const workflowsRes = await fetch(`/api/teams/${teamId}/workflows`);
+      if (workflowsRes.ok) {
+        const workflowsJson = await workflowsRes.json();
+        setTeamProcesses(workflowsJson.workflows || []);
+      }
+    } catch (e: any) {
+      toast.error(e.message || "공유에 실패했습니다");
+    } finally {
+      setIsSharing(false);
+    }
+  }
+
+  // Remove workflow from team
+  async function handleRemoveWorkflow(workflowId: string) {
+    if (!teamId) return;
+    
+    try {
+      const res = await fetch(`/api/teams/${teamId}/workflows/${workflowId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("제외 실패");
+
+      toast.success("업무 프로세스가 팀에서 제외되었습니다");
+      
+      // Reload team workflows
+      const workflowsRes = await fetch(`/api/teams/${teamId}/workflows`);
+      if (workflowsRes.ok) {
+        const workflowsJson = await workflowsRes.json();
+        setTeamProcesses(workflowsJson.workflows || []);
+      }
+    } catch (e: any) {
+      toast.error(e.message || "제외에 실패했습니다");
+    }
+  }
+
   // Migrate workflows
   async function handleMigrateWorkflows() {
     if (!teamId) return;
@@ -472,58 +611,12 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       const workflowsRes = await fetch(`/api/teams/${teamId}/workflows`);
       if (workflowsRes.ok) {
         const workflowsJson = await workflowsRes.json();
-        setWorkflows(workflowsJson.workflows || []);
+        setTeamProcesses(workflowsJson.workflows || []);
       }
     } catch (e: any) {
       toast.error(e.message || "마이그레이션에 실패했습니다");
     } finally {
       setIsMigrating(false);
-    }
-  }
-
-  // Open share dialog
-  async function openShareDialog(workflow: Workflow) {
-    setSelectedWorkflow(workflow);
-    setShareType("all");
-    setSelectedMembers([]);
-    
-    // Load current shares
-    try {
-      const res = await fetch(`/api/teams/${teamId}/workflows/${workflow.workflow_id}/shares`);
-      if (res.ok) {
-        const json = await res.json();
-        setWorkflowShares(json.shares || []);
-        if (json.shares && json.shares.length > 0) {
-          setShareType("specific");
-          setSelectedMembers(json.shares.map((s: WorkflowShare) => s.team_member_id));
-        }
-      }
-    } catch (e) {
-      console.error("Failed to load shares", e);
-    }
-    
-    setIsShareDialogOpen(true);
-  }
-
-  // Update workflow sharing
-  async function updateWorkflowSharing() {
-    if (!selectedWorkflow || !teamId) return;
-
-    try {
-      const res = await fetch(`/api/teams/${teamId}/workflows/${selectedWorkflow.workflow_id}/shares`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          member_ids: shareType === "all" ? [] : selectedMembers,
-        }),
-      });
-
-      if (!res.ok) throw new Error("공유 설정 실패");
-
-      toast.success("공유 설정이 업데이트되었습니다");
-      setIsShareDialogOpen(false);
-    } catch (e: any) {
-      toast.error(e.message || "공유 설정 업데이트에 실패했습니다");
     }
   }
 
@@ -870,61 +963,53 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
         </Card>
       )}
 
-      {/* Team Workflows Section */}
+      {/* Team Processes Section */}
       {teamId && myStatus === "active" && (
         <Card>
          
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold">팀 워크플로우</h3>
+                <h3 className="text-lg font-semibold">팀 업무 프로세스</h3>
                 <p className="text-sm text-muted-foreground">
-                  이 팀의 모든 워크플로우 목록입니다
+                  이 팀의 모든 업무 프로세스 목록입니다
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="outline">
-                  {workflows.length}개
+                  {teamProcesses.length}개
                 </Badge>
                 {isAdmin && (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setIsMigrateDialogOpen(true)}
+                    onClick={() => {
+                      setSelectedWorkflows([]);
+                      setIsShareDialogOpen(true);
+                    }}
                   >
                     <Plus className="mr-2 h-4 w-4" />
-                    워크플로우 이관
+                    업무 프로세스 공유
                   </Button>
                 )}
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            {workflows.length === 0 ? (
+            {teamProcesses.length === 0 ? (
               <div className="py-8 text-center">
                 <LinkIcon className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                <h4 className="mb-2 text-lg font-semibold">워크플로우가 없습니다</h4>
+                <h4 className="mb-2 text-lg font-semibold">업무 프로세스가 없습니다</h4>
                 <p className="text-sm text-muted-foreground">
-                  이 팀에는 아직 워크플로우가 없습니다.
+                  이 팀에는 아직 업무 프로세스가 없습니다.
                 </p>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  참고: 업무프로세스 페이지에서 워크플로우를 생성한 후 
-                  "워크플로우 이관" 기능으로 이 팀에 추가할 수 있습니다.
+                  참고: 새 팀을 생성할 때 내 업무 프로세스를 선택하여 공유할 수 있습니다.
                 </p>
-                {isAdmin && (
-                  <Button
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => setIsMigrateDialogOpen(true)}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    워크플로우 이관하기
-                  </Button>
-                )}
               </div>
             ) : (
               <div className="max-h-96 space-y-3 overflow-y-auto">
-                {workflows.map((workflow) => (
+                {teamProcesses.map((workflow) => (
                   <div
                     key={workflow.workflow_id}
                     className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/50"
@@ -951,19 +1036,19 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                         size="sm"
                         asChild
                       >
-                        <Link to="/work/business-logic">
-                          <ArrowRight className="mr-2 h-4 w-4" />
-                          열기
+                        <Link to={`/work/business-logic?workflow=${workflow.workflow_id}`}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          보기
                         </Link>
                       </Button>
                       {isAdmin && (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => openShareDialog(workflow)}
+                          onClick={() => handleRemoveWorkflow(workflow.workflow_id.toString())}
                         >
-                          <Share2 className="mr-2 h-4 w-4" />
-                          공유
+                          <X className="mr-2 h-4 w-4" />
+                          팀에서 제외
                         </Button>
                       )}
                     </div>
@@ -1156,72 +1241,6 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Share Workflow Dialog */}
-      <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>워크플로우 공유</DialogTitle>
-            <DialogDescription>
-              이 워크플로우를 특정 팀원에게만 공유하거나 전체 공유할 수 있습니다.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>공유 범위</Label>
-              <Select value={shareType} onValueChange={(val: "all" | "specific") => setShareType(val)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">팀 전체 공유</SelectItem>
-                  <SelectItem value="specific">특정 팀원만 공유</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {shareType === "specific" && (
-              <div className="space-y-2">
-                <Label>팀원 선택</Label>
-                <div className="max-h-40 space-y-2 overflow-y-auto">
-                  {members
-                    .filter((m) => m.status === "active")
-                    .map((member) => (
-                      <div key={member.member_id} className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id={member.member_id}
-                          checked={selectedMembers.includes(member.member_id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedMembers([...selectedMembers, member.member_id]);
-                            } else {
-                              setSelectedMembers(selectedMembers.filter((id) => id !== member.member_id));
-                            }
-                          }}
-                          className="rounded"
-                        />
-                        <Label htmlFor={member.member_id} className="text-sm">
-                          {member.email}
-                        </Label>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsShareDialogOpen(false)}
-            >
-              취소
-            </Button>
-            <Button onClick={updateWorkflowSharing}>
-              공유 설정 저장
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Verify Team Dialog */}
       <Dialog open={isVerifyDialogOpen} onOpenChange={setIsVerifyDialogOpen}>
         <DialogContent className="sm:max-w-lg">
@@ -1308,11 +1327,12 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
 
       {/* Create Team Dialog */}
       <Dialog open={isCreateTeamDialogOpen} onOpenChange={setIsCreateTeamDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>새 팀 생성</DialogTitle>
             <DialogDescription>
-              새로운 팀을 생성하고 팀 관리자가 됩니다.
+              새로운 팀을 생성하고 팀 관리자가 됩니다. 
+              내 업무 프로세스를 선택하여 팀에 공유할 수 있습니다.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1330,13 +1350,60 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
               <Label htmlFor="team-description">팀 설명</Label>
               <Textarea
                 id="team-description"
-                placeholder="팀에 대한 간단한 설명을 입력하세요 (선택사항)"
+                placeholder="팀에 대한 설명을 입력하세요"
                 value={newTeamDescription}
                 onChange={(e) => setNewTeamDescription(e.target.value)}
                 disabled={isCreatingTeam}
                 rows={3}
               />
             </div>
+            
+            {/* Workflow Selection */}
+            {userWorkflows.length > 0 && (
+              <div className="space-y-2">
+                <Label>팀에 공유할 업무 프로세스 선택</Label>
+                <div className="max-h-40 overflow-y-auto border rounded-md p-2">
+                  {userWorkflows.map((workflow: any) => (
+                    <div key={workflow.workflow_id} className="flex items-center space-x-2 py-1">
+                      <Checkbox
+                        id={`workflow-${workflow.workflow_id}`}
+                        checked={selectedWorkflows.includes(workflow.workflow_id.toString())}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedWorkflows([...selectedWorkflows, workflow.workflow_id.toString()]);
+                          } else {
+                            setSelectedWorkflows(selectedWorkflows.filter(id => id !== workflow.workflow_id.toString()));
+                          }
+                        }}
+                        disabled={isCreatingTeam}
+                      />
+                      <Label 
+                        htmlFor={`workflow-${workflow.workflow_id}`}
+                        className="text-sm cursor-pointer flex-1 flex items-center gap-2"
+                      >
+                        <span>{workflow.title}</span>
+                        {workflow.team_id && workflow.team_id !== "" && workflow.team_id !== null && (
+                          <Badge variant="secondary" className="text-xs">
+                            이미 공유됨 (복사됨)
+                          </Badge>
+                        )}
+                        {(!workflow.team_id || workflow.team_id === "" || workflow.team_id === null) && (
+                          <Badge variant="outline" className="text-xs">
+                            개인
+                          </Badge>
+                        )}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {userWorkflows.length === 0 && (
+              <div className="text-sm text-muted-foreground">
+                공유할 업무 프로세스가 없습니다.
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -1345,6 +1412,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 setIsCreateTeamDialogOpen(false);
                 setNewTeamName("");
                 setNewTeamDescription("");
+                setSelectedWorkflows([]);
               }}
               disabled={isCreatingTeam}
             >
@@ -1361,6 +1429,90 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 </>
               ) : (
                 "팀 생성"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Share Workflows Dialog */}
+      <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>업무 프로세스 공유</DialogTitle>
+            <DialogDescription>
+              내 업무 프로세스를 선택하여 팀에 공유합니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {userWorkflows.length > 0 && (
+              <div className="space-y-2">
+                <Label>공유할 업무 프로세스 선택</Label>
+                <div className="max-h-60 overflow-y-auto border rounded-md p-2">
+                  {userWorkflows.map((workflow: any) => (
+                    <div key={workflow.workflow_id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded">
+                      <Checkbox
+                        id={`share-workflow-${workflow.workflow_id}`}
+                        checked={selectedWorkflows.includes(workflow.workflow_id.toString())}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedWorkflows([...selectedWorkflows, workflow.workflow_id.toString()]);
+                          } else {
+                            setSelectedWorkflows(selectedWorkflows.filter(id => id !== workflow.workflow_id.toString()));
+                          }
+                        }}
+                        disabled={isSharing}
+                      />
+                      <Label 
+                        htmlFor={`share-workflow-${workflow.workflow_id}`}
+                        className="text-sm cursor-pointer flex-1 flex items-center gap-2"
+                      >
+                        <span>{workflow.title}</span>
+                        {workflow.team_id && workflow.team_id !== "" && workflow.team_id !== null && (
+                          <Badge variant="secondary" className="text-xs">
+                            이미 공유됨 (복사됨)
+                          </Badge>
+                        )}
+                        {(!workflow.team_id || workflow.team_id === "" || workflow.team_id === null) && (
+                          <Badge variant="outline" className="text-xs">
+                            개인
+                          </Badge>
+                        )}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {userWorkflows.length === 0 && (
+              <div className="text-sm text-muted-foreground">
+                공유할 업무 프로세스가 없습니다.
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsShareDialogOpen(false);
+                setSelectedWorkflows([]);
+              }}
+              disabled={isSharing}
+            >
+              취소
+            </Button>
+            <Button
+              onClick={handleShareWorkflows}
+              disabled={isSharing || selectedWorkflows.length === 0}
+            >
+              {isSharing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  공유 중...
+                </>
+              ) : (
+                "확인"
               )}
             </Button>
           </DialogFooter>

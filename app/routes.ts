@@ -55,6 +55,7 @@ export default [
       route("/upload", "routes/api/work/upload.ts"),
       route("/videos", "routes/api/work/videos.ts"),
       route("/analyze", "routes/api/work/analyze.ts"),
+      route("/workflows", "routes/api/work/workflows.ts"),
       route(
         "/workflows/:workflowId/status",
         "routes/api/work/workflows.$workflowId.status.ts",
