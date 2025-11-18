@@ -13,7 +13,6 @@ import {
   Plus,
   Search,
   Share2,
-  Shield,
   UserPlus,
   Users,
   X,
@@ -102,23 +101,6 @@ interface Workflow {
   sourceVideo?: any;
 }
 
-interface VerificationResult {
-  success: boolean;
-  summary: {
-    total_members: number;
-    active_members: number;
-    total_workflows: number;
-    members_with_access: number;
-  };
-  member_access: Array<{
-    member_id: string;
-    email: string;
-    accessible_workflows: number;
-    issues: string[];
-  }>;
-  recommendations: string[];
-}
-
 export async function loader({ request }: Route.LoaderArgs) {
   const [client] = makeServerClient(request);
   const {
@@ -180,10 +162,6 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
-  
-  const [isVerifyDialogOpen, setIsVerifyDialogOpen] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
   
   const [isLoading, setIsLoading] = useState(false);
 
@@ -579,9 +557,9 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
         method: "DELETE",
       });
 
-      if (!res.ok) throw new Error("제외 실패");
+      if (!res.ok) throw new Error("공유 중지 실패");
 
-      toast.success("업무 프로세스가 팀에서 제외되었습니다");
+      toast.success("업무 프로세스 공유가 중지되었습니다");
       
       // Reload team workflows
       const workflowsRes = await fetch(`/api/teams/${teamId}/workflows`);
@@ -590,7 +568,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
         setTeamProcesses(workflowsJson.workflows || []);
       }
     } catch (e: any) {
-      toast.error(e.message || "제외에 실패했습니다");
+      toast.error(e.message || "공유 중지에 실패했습니다");
     }
   }
 
@@ -620,25 +598,6 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       toast.error(e.message || "마이그레이션에 실패했습니다");
     } finally {
       setIsMigrating(false);
-    }
-  }
-
-  // Verify team access
-  async function handleVerifyTeam() {
-    if (!teamId) return;
-
-    setIsVerifying(true);
-    try {
-      const res = await fetch(`/api/teams/${teamId}/verify`);
-      if (!res.ok) throw new Error("검증 실패");
-
-      const json = await res.json();
-      setVerificationResult(json);
-      toast.success("검증이 완료되었습니다");
-    } catch (e: any) {
-      toast.error(e.message || "검증에 실패했습니다");
-    } finally {
-      setIsVerifying(false);
     }
   }
 
@@ -749,32 +708,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
               </div>
             )}
           </div>
-        {/* 관리자 기능 섹션 */}
-            {isAdmin && (
-              <div className="border-t pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-sm font-medium">팀 관리</p>
-                    <p className="text-xs text-muted-foreground">팀원 초대 및 권한 관리</p>
-                  </div>
-                  <Badge variant="secondary" className="text-xs">
-                    관리자 기능
-                  </Badge>
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={() => setIsInviteDialogOpen(true)} className="flex-1">
-                    <Plus className="mr-2 h-4 w-4" />
-                    팀원 초대
-                  </Button>
-                  {myStatus === "active" && (
-                    <Button variant="outline" onClick={handleVerifyTeam} disabled={isVerifying}>
-                      <Shield className="mr-2 h-4 w-4" />
-                      {isVerifying ? "검증 중..." : "권한 검증"}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
+        
       </Card>
       )}
 
@@ -852,7 +786,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
               <div>
                 <h3 className="text-lg font-semibold">팀원 목록</h3>
                 <p className="text-sm text-muted-foreground">
-                  이 팀의 모든 팀원 목록입니다
+                  팀원 목록입니다
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -925,7 +859,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                       <TableHead>상태</TableHead>
                       <TableHead>초대일</TableHead>
                       <TableHead>가입일</TableHead>
-                      <TableHead className="text-right">작업</TableHead>
+                      <TableHead >작업</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -984,7 +918,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                             ? new Date(member.joined_at).toLocaleDateString("ko-KR")
                             : "-"}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell >
                           {isAdmin && member.role !== "owner" && member.status !== "inactive" && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -1023,7 +957,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
               <div>
                 <h3 className="text-lg font-semibold">팀 업무 프로세스</h3>
                 <p className="text-sm text-muted-foreground">
-                  이 팀의 모든 업무 프로세스 목록입니다
+                  업무 프로세스 목록입니다
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -1099,7 +1033,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                           onClick={() => handleRemoveWorkflow(workflow.workflow_id.toString())}
                         >
                           <X className="mr-2 h-4 w-4" />
-                          팀에서 제외
+                          공유 중지
                         </Button>
                       )}
                     </div>
@@ -1288,90 +1222,6 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 "워크플로우 이관"
               )}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Verify Team Dialog */}
-      <Dialog open={isVerifyDialogOpen} onOpenChange={setIsVerifyDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>팀 접근 권한 검증</DialogTitle>
-            <DialogDescription>
-              팀원들의 워크플로우 접근 권한을 검증하고 문제점을 확인합니다.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {verificationResult ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center">
-                    <p className="text-2xl font-bold">{verificationResult.summary.total_members}</p>
-                    <p className="text-sm text-muted-foreground">전체 팀원</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold">{verificationResult.summary.members_with_access}</p>
-                    <p className="text-sm text-muted-foreground">접근 가능</p>
-                  </div>
-                </div>
-                
-                {verificationResult.recommendations.length > 0 && (
-                  <div>
-                    <h4 className="font-medium mb-2">권장 사항</h4>
-                    <ul className="space-y-1 text-sm text-muted-foreground">
-                      {verificationResult.recommendations.map((rec, idx) => (
-                        <li key={idx}>• {rec}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                
-                {verificationResult.member_access.some(m => m.issues.length > 0) && (
-                  <div>
-                    <h4 className="font-medium mb-2">문제점</h4>
-                    <div className="space-y-2">
-                      {verificationResult.member_access
-                        .filter(m => m.issues.length > 0)
-                        .map((member) => (
-                          <div key={member.member_id} className="text-sm">
-                            <p className="font-medium">{member.email}</p>
-                            {member.issues.map((issue, idx) => (
-                              <p key={idx} className="text-destructive">• {issue}</p>
-                            ))}
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="py-8 text-center">
-                <Shield className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  검증을 시작하면 팀원들의 워크플로우 접근 권한을 분석합니다.
-                </p>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsVerifyDialogOpen(false)}
-            >
-              닫기
-            </Button>
-            {!verificationResult && (
-              <Button onClick={handleVerifyTeam} disabled={isVerifying}>
-                {isVerifying ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    검증 중...
-                  </>
-                ) : (
-                  "검증 시작"
-                )}
-              </Button>
-            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

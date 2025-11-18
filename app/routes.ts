@@ -45,9 +45,15 @@ export default [
       route("/:teamId/members", "routes/api/teams/$teamId.members.ts"),
       route("/:teamId/members/:memberId", "routes/api/teams/$teamId.members.$memberId.ts"),
       route("/:teamId/workflows", "routes/api/teams/$teamId.workflows.ts"),
-      route("/:teamId/workflows/:workflowId/shares", "routes/api/teams/$teamId.workflows.$workflowId.shares.ts"),
+      route(
+        "/:teamId/workflows/:workflowId",
+        "routes/api/teams/$teamId.workflows.$workflowId.ts",
+      ),
+      route(
+        "/:teamId/workflows/:workflowId/shares",
+        "routes/api/teams/$teamId.workflows.$workflowId.shares.ts",
+      ),
       route("/:teamId/migrate-workflows", "routes/api/teams/$teamId.migrate-workflows.ts"),
-      route("/:teamId/verify", "routes/api/teams/$teamId.verify.ts"),
       route("/invites/:token", "routes/api/teams/invites.$token.ts"),
       route("/invites/:token/accept", "routes/api/teams/invites.$token.accept.ts"),
     ]),
