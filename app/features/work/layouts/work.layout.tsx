@@ -10,6 +10,10 @@ import {
 } from "~/core/components/ui/sidebar";
 import makeServerClient from "~/core/lib/supa-client.server";
 
+import db from "~/core/db/drizzle-client.server";
+import { profiles } from "~/features/users/schema";
+import { eq } from "drizzle-orm";
+
 import WorkSidebar from "../components/work-sidebar";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -25,13 +29,26 @@ export async function loader({ request }: Route.LoaderArgs) {
     throw redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
   }
 
+  let isSuperAdmin = false;
+
+  if (user) {
+    const [profile] = await db
+      .select({ is_super_admin: profiles.is_super_admin })
+      .from(profiles)
+      .where(eq(profiles.profile_id, user.id as any))
+      .limit(1);
+
+    isSuperAdmin = !!profile?.is_super_admin;
+  }
+
   return {
     user,
+    isSuperAdmin,
   };
 }
 
 export default function WorkLayout({ loaderData }: Route.ComponentProps) {
-  const { user } = loaderData;
+  const { user, isSuperAdmin } = loaderData as any;
   return (
     <SidebarProvider>
       <WorkSidebar
@@ -40,6 +57,7 @@ export default function WorkLayout({ loaderData }: Route.ComponentProps) {
           avatarUrl: user?.user_metadata.avatar_url ?? "",
           email: user?.email ?? "",
         }}
+        isSuperAdmin={isSuperAdmin}
       />
       <SidebarInset>
         <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4 lg:hidden">

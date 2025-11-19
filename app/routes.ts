@@ -147,6 +147,8 @@ export default [
       // Account / Profile pages
       route("/account", "features/users/screens/account.tsx"),
       route("/account/edit", "features/users/screens/account.edit.tsx"),
+      // Super admin dashboard (requires is_super_admin flag in profiles)
+      route("/admin/super-dashboard", "features/admin/screens/super-dashboard.tsx"),
     ]),
     route("/contact", "features/contact/screens/contact-us.tsx"),
     ...prefix("/payments", [

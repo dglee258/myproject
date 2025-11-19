@@ -5,6 +5,7 @@ import {
   UploadIcon,
   UserIcon,
   UsersIcon,
+  ShieldCheckIcon,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 
@@ -36,7 +37,7 @@ import {
   SidebarTrigger,
 } from "~/core/components/ui/sidebar";
 
-const navItems = [
+const baseNavItems = [
   {
     title: "업무프로세스",
     url: "/work/business-logic",
@@ -61,16 +62,29 @@ export default function WorkSidebar(
       email: string;
       avatarUrl?: string;
     };
+    isSuperAdmin?: boolean;
   },
 ) {
   const navigate = useNavigate();
-  const user = props.user || {
+  const { isSuperAdmin, ...sidebarProps } = props;
+
+  const user = sidebarProps.user || {
     name: "홍길동",
     email: "hong@example.com",
     avatarUrl: "https://github.com/shadcn.png",
   };
+
+  const navItems = [...baseNavItems];
+
+  if (isSuperAdmin) {
+    navItems.push({
+      title: "관리자 대시보드",
+      url: "/admin/super-dashboard",
+      icon: ShieldCheckIcon,
+    });
+  }
   return (
-    <Sidebar collapsible="icon" variant="inset" {...props}>
+    <Sidebar collapsible="icon" variant="inset" {...sidebarProps}>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-4">
           <SidebarTrigger className="-ml-1 hidden lg:flex" />

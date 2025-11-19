@@ -9,6 +9,10 @@ import {
 } from "~/core/components/ui/sidebar";
 import makeServerClient from "~/core/lib/supa-client.server";
 
+import db from "~/core/db/drizzle-client.server";
+import { profiles } from "~/features/users/schema";
+import { eq } from "drizzle-orm";
+
 import DashboardSidebar from "../components/dashboard-sidebar";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -16,13 +20,25 @@ export async function loader({ request }: Route.LoaderArgs) {
   const {
     data: { user },
   } = await client.auth.getUser();
+  let isSuperAdmin = false;
+
+  if (user) {
+    const [profile] = await db
+      .select({ is_super_admin: profiles.is_super_admin })
+      .from(profiles)
+      .where(eq(profiles.profile_id, user.id as any))
+      .limit(1);
+
+    isSuperAdmin = !!profile?.is_super_admin;
+  }
   return {
     user,
+    isSuperAdmin,
   };
 }
 
 export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
-  const { user } = loaderData;
+  const { user, isSuperAdmin } = loaderData as any;
   return (
     <SidebarProvider>
       <DashboardSidebar
@@ -31,6 +47,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
           avatarUrl: user?.user_metadata.avatar_url ?? "",
           email: user?.email ?? "",
         }}
+        isSuperAdmin={isSuperAdmin}
       />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">

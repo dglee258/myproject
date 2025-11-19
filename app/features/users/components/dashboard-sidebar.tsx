@@ -18,6 +18,7 @@ import {
   SquareTerminalIcon,
   Target,
   UsersIcon,
+  ShieldCheckIcon,
 } from "lucide-react";
 
 import {
@@ -155,6 +156,7 @@ const data = {
 
 export default function DashboardSidebar({
   user,
+  isSuperAdmin,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   user: {
@@ -162,14 +164,30 @@ export default function DashboardSidebar({
     email: string;
     avatarUrl: string;
   };
+  isSuperAdmin?: boolean;
 }) {
+  const navMain = [...data.navMain];
+
+  if (isSuperAdmin) {
+    navMain.push({
+      title: "Admin",
+      url: "/admin",
+      icon: ShieldCheckIcon,
+      items: [
+        {
+          title: "Super Dashboard",
+          url: "/admin/super-dashboard",
+        },
+      ],
+    });
+  }
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
       <SidebarHeader>
         <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
       <SidebarContent>
-        <SidebarMain items={data.navMain} />
+        <SidebarMain items={navMain} />
         <SidebarProjects projects={data.projects} />
       </SidebarContent>
       <SidebarFooter>
