@@ -71,7 +71,7 @@ export default function EditProfileForm({
               >
                 <span>프로필 사진</span>
                 <Avatar className="size-24">
-                  {avatar ? <AvatarImage src={avatar} alt="Avatar" /> : null}
+                  {avatar ? <AvatarImage src={avatar} alt="프로필 이미지" /> : null}
                   <AvatarFallback>
                     <UserIcon className="text-muted-foreground size-10" />
                   </AvatarFallback>
@@ -99,7 +99,7 @@ export default function EditProfileForm({
                 name="name"
                 required
                 type="text"
-                placeholder="Name"
+                placeholder="이름을 입력하세요"
                 defaultValue={name}
               />
               {fetcher.data &&

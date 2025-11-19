@@ -37,10 +37,25 @@ export async function loader({ request }: Route.LoaderArgs) {
   ]);
 
   // 서비스 페이지 콘텐츠 조회
-  const { getServicePageContent } = await import("../queries.server");
-  const content = await getServicePageContent();
+  // DB에 service_sections / service_items 테이블이 없거나 에러가 발생해도
+  // 기본 하드코딩 텍스트로 페이지가 동작하도록 가드를 추가합니다.
 
-  return { flags, content };
+  const defaultContent = {
+    hero: {},
+    how_it_works: { items: [] },
+    key_features: { items: [] },
+    use_cases: { items: [] },
+    cta: {},
+  } as any;
+
+  try {
+    const { getServicePageContent } = await import("../queries.server");
+    const content = await getServicePageContent();
+    return { flags, content };
+  } catch (e) {
+    console.error("[Service] Failed to load service page content from DB", e);
+    return { flags, content: defaultContent };
+  }
 }
 
 export default function Service({ loaderData }: Route.ComponentProps) {
