@@ -4,6 +4,21 @@ import * as React from "react";
 
 import { cn } from "~/core/lib/utils";
 
+const VisuallyHidden = React.forwardRef<
+  React.ElementRef<"span">,
+  React.ComponentPropsWithoutRef<"span">
+>(({ className, ...props }, ref) => (
+  <span
+    ref={ref}
+    className={cn(
+      "absolute -m-px h-px w-px overflow-hidden border-0 p-0 whitespace-nowrap",
+      className,
+    )}
+    {...props}
+  />
+));
+VisuallyHidden.displayName = "VisuallyHidden";
+
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
 }
@@ -69,6 +84,10 @@ function SheetContent({
         )}
         {...props}
       >
+        <VisuallyHidden>
+          <SheetPrimitive.Title>Sheet</SheetPrimitive.Title>
+          <SheetPrimitive.Description>Sheet content</SheetPrimitive.Description>
+        </VisuallyHidden>
         {children}
         <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
           <XIcon className="size-4" />

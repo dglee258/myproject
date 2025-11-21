@@ -12,8 +12,8 @@ import { useLoaderData, useSearchParams } from "react-router";
 
 import { Button } from "~/core/components/ui/button";
 import { Progress } from "~/core/components/ui/progress";
-import makeServerClient from "~/core/lib/supa-client.server";
 import { supabaseBrowser } from "~/core/lib/supa-client.client";
+import makeServerClient from "~/core/lib/supa-client.server";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -65,9 +65,7 @@ export default function Upload() {
     setIsDragging(false);
 
     const files = Array.from(e.dataTransfer.files);
-    const videoFile = files.find((file) =>
-      file.type.startsWith("video/"),
-    );
+    const videoFile = files.find((file) => file.type.startsWith("video/"));
 
     if (videoFile) {
       processFile(videoFile);
@@ -82,6 +80,21 @@ export default function Upload() {
   };
 
   const processFile = (file: File) => {
+    // 파일 크기 검증 (50MB 제한)
+    const maxSize = 50 * 1024 * 1024; // 50MB in bytes
+    if (file.size > maxSize) {
+      alert(
+        `파일 크기가 50MB를 초과했습니다. 현재 파일 크기: ${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+      );
+      return;
+    }
+
+    // 파일 타입 검증
+    if (!file.type.startsWith("video/")) {
+      alert("동영상 파일만 업로드할 수 있습니다.");
+      return;
+    }
+
     const preview = URL.createObjectURL(file);
     setVideoFile({
       file,
@@ -131,12 +144,14 @@ export default function Upload() {
       const { video_id } = await createRes.json();
 
       // 3) 분석 시작
-      setVideoFile((prev) => (prev ? { ...prev, status: "processing", progress: 0 } : null));
+      setVideoFile((prev) =>
+        prev ? { ...prev, status: "processing", progress: 0 } : null,
+      );
       const analyzeBody: any = { video_id };
       if (teamId) {
         analyzeBody.team_id = teamId;
       }
-      
+
       const analyzeRes = await fetch("/api/work/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -150,10 +165,12 @@ export default function Upload() {
 
       // 4) 진행 상황 폴링
       await pollAnalysisProgress(workflow_id);
-      setVideoFile((prev) => (prev ? { ...prev, status: "completed", progress: 100 } : null));
+      setVideoFile((prev) =>
+        prev ? { ...prev, status: "completed", progress: 100 } : null,
+      );
 
       // 5) 결과 페이지로 이동
-      const resultUrl = teamId 
+      const resultUrl = teamId
         ? `/work/business-logic?workflow=${workflow_id}&teamId=${teamId}`
         : `/work/business-logic?workflow=${workflow_id}`;
       window.location.href = resultUrl;
@@ -179,7 +196,13 @@ export default function Upload() {
           if (!res.ok) throw new Error(`상태 조회 실패(${res.status})`);
           const { status, progress } = await res.json();
           setVideoFile((prev) =>
-            prev ? { ...prev, progress, status: status === "analyzed" ? "completed" : "processing" } : null,
+            prev
+              ? {
+                  ...prev,
+                  progress,
+                  status: status === "analyzed" ? "completed" : "processing",
+                }
+              : null,
           );
           if (status === "analyzed") {
             clearInterval(interval);
@@ -234,7 +257,7 @@ export default function Upload() {
     <div className="container mx-auto max-w-4xl p-6">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">동영상 AI 처리</h1>
+        <h1 className="mb-2 text-3xl font-bold">동영상 AI 처리</h1>
         <p className="text-muted-foreground">
           동영상을 업로드하면 AI가 자동으로 분석하고 처리합니다
         </p>
@@ -246,26 +269,23 @@ export default function Upload() {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`
-            relative rounded-lg border-2 border-dashed p-12 text-center transition-colors
-            ${
-              isDragging
-                ? "border-primary bg-primary/5"
-                : "border-muted-foreground/25 hover:border-primary/50"
-            }
-          `}
+          className={`relative rounded-lg border-2 border-dashed p-12 text-center transition-colors ${
+            isDragging
+              ? "border-primary bg-primary/5"
+              : "border-muted-foreground/25 hover:border-primary/50"
+          } `}
         >
           <div className="flex flex-col items-center gap-4">
-            <div className="rounded-full bg-primary/10 p-6">
-              <UploadIcon className="size-12 text-primary" />
+            <div className="bg-primary/10 rounded-full p-6">
+              <UploadIcon className="text-primary size-12" />
             </div>
 
             <div className="space-y-2">
               <h3 className="text-xl font-semibold">
                 동영상 파일을 드래그하거나 선택하세요
               </h3>
-              <p className="text-sm text-muted-foreground">
-                MP4, MOV, AVI, WebM 등 지원 (최대 500MB)
+              <p className="text-muted-foreground text-sm">
+                MP4, MOV, AVI, WebM 등 지원 (최대 50MB)
               </p>
             </div>
 
@@ -287,10 +307,10 @@ export default function Upload() {
         /* Video Preview & Processing */
         <div className="space-y-6">
           {/* Video Card */}
-          <div className="rounded-lg border bg-card p-6">
+          <div className="bg-card rounded-lg border p-6">
             <div className="flex items-start gap-4">
               {/* Video Preview */}
-              <div className="relative size-32 shrink-0 overflow-hidden rounded-lg bg-muted">
+              <div className="bg-muted relative size-32 shrink-0 overflow-hidden rounded-lg">
                 <video
                   src={videoFile.preview}
                   className="size-full object-cover"
@@ -306,7 +326,7 @@ export default function Upload() {
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="font-semibold">{videoFile.file.name}</h3>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       {(videoFile.file.size / (1024 * 1024)).toFixed(2)} MB
                     </p>
                   </div>
@@ -346,7 +366,7 @@ export default function Upload() {
                 {/* Processing Steps */}
                 {(videoFile.status === "processing" ||
                   videoFile.status === "completed") && (
-                  <div className="space-y-2 rounded-lg bg-muted/50 p-4">
+                  <div className="bg-muted/50 space-y-2 rounded-lg p-4">
                     <h4 className="text-sm font-medium">AI 처리 단계</h4>
                     <div className="space-y-2">
                       <ProcessingStep
@@ -389,11 +409,7 @@ export default function Upload() {
                   <UploadIcon className="mr-2 size-4" />
                   업로드 및 AI 처리 시작
                 </Button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={handleRemove}
-                >
+                <Button variant="outline" size="lg" onClick={handleRemove}>
                   취소
                 </Button>
               </>
@@ -404,11 +420,7 @@ export default function Upload() {
                 <Button size="lg" className="flex-1">
                   결과 확인
                 </Button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={handleRemove}
-                >
+                <Button variant="outline" size="lg" onClick={handleRemove}>
                   새로운 파일 업로드
                 </Button>
               </>
@@ -456,14 +468,14 @@ function ProcessingStep({
       ) : active ? (
         <Loader2 className="size-4 animate-spin text-purple-600" />
       ) : (
-        <div className="size-4 rounded-full border-2 border-muted-foreground/30" />
+        <div className="border-muted-foreground/30 size-4 rounded-full border-2" />
       )}
       <span
         className={`text-sm ${
           completed
             ? "text-green-600"
             : active
-              ? "text-purple-600 font-medium"
+              ? "font-medium text-purple-600"
               : "text-muted-foreground"
         }`}
       >
@@ -483,10 +495,10 @@ function InfoCard({
   description: string;
 }) {
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="mb-2 text-primary">{icon}</div>
+    <div className="bg-card rounded-lg border p-4">
+      <div className="text-primary mb-2">{icon}</div>
       <h3 className="mb-1 font-semibold">{title}</h3>
-      <p className="text-sm text-muted-foreground">{description}</p>
+      <p className="text-muted-foreground text-sm">{description}</p>
     </div>
   );
 }
