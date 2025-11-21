@@ -218,6 +218,7 @@ export async function action({ request }: Route.ActionArgs) {
     to: [process.env.ADMIN_EMAIL!],
     subject: "New contact from Supaplate",
     html: `
+      <meta charset="utf-8">
       <p><b>Name:</b> ${name}</p>
       <p><b>Email:</b> ${email}</p>
       <p><b>Message:</b> ${message}</p>
@@ -238,29 +239,29 @@ export async function action({ request }: Route.ActionArgs) {
 
 /**
  * Contact Us Form Component
- * 
+ *
  * This component renders a contact form with dual CAPTCHA protection.
  * It manages form state, CAPTCHA tokens, and provides user feedback
  * based on the form submission results.
- * 
+ *
  * @param actionData - Data returned from the action function after form submission
  */
 export default function ContactUs({ actionData }: Route.ComponentProps) {
   // State for storing CAPTCHA tokens from both providers
   const [hcaptchaToken, setHcaptchaToken] = useState<string>("");
   const [turnstileToken, setTurnstileToken] = useState<string>("");
-  
+
   // State to control when to render CAPTCHA widgets (prevents SSR issues)
   const [renderCaptchas, setRenderCaptchas] = useState<boolean>(false);
-  
+
   // References to interact with CAPTCHA widgets and form
   const hcaptchaRef = useRef<HCaptcha>(null); // Reference to HCaptcha widget for resetting
   const turnstile = useTurnstile(); // Hook for Turnstile widget interactions
   const formRef = useRef<HTMLFormElement>(null); // Reference to the form element
-  
+
   /**
    * Effect for handling form submission results
-   * 
+   *
    * This effect runs whenever actionData changes (after form submission).
    * It handles:
    * 1. Resetting both CAPTCHA widgets
@@ -270,7 +271,7 @@ export default function ContactUs({ actionData }: Route.ComponentProps) {
    */
   useEffect(() => {
     if (!actionData || !renderCaptchas) return;
-    
+
     // Reset both CAPTCHA widgets and their tokens
     // Check if turnstile is available before calling reset
     if (turnstile?.reset) {
@@ -279,27 +280,27 @@ export default function ContactUs({ actionData }: Route.ComponentProps) {
     hcaptchaRef.current?.resetCaptcha();
     setHcaptchaToken("");
     setTurnstileToken("");
-    
+
     // Handle successful submission
     if (actionData?.success) {
       // Show success message
       toast.success("Email sent successfully");
-      
+
       // Reset form and remove focus from inputs
       formRef.current?.reset();
       formRef.current?.querySelectorAll("input").forEach((input) => {
         input.blur();
       });
-    } 
+    }
     // Handle error in submission
     else if ("error" in actionData && actionData.error) {
       toast.error(actionData.error.message);
     }
   }, [actionData, renderCaptchas, turnstile]);
-  
+
   /**
    * Effect for delayed rendering of CAPTCHA widgets
-   * 
+   *
    * This effect runs once on component mount and enables CAPTCHA rendering.
    * The delayed rendering prevents hydration mismatches and other SSR issues
    * that can occur with third-party CAPTCHA widgets.
@@ -309,7 +310,7 @@ export default function ContactUs({ actionData }: Route.ComponentProps) {
   }, []);
   /**
    * Render the contact form with dual CAPTCHA protection
-   * 
+   *
    * The component renders:
    * 1. A header section with title and description
    * 2. A form with name, email, and message fields
