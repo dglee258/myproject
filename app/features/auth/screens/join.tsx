@@ -28,6 +28,7 @@ import {
 import { Checkbox } from "~/core/components/ui/checkbox";
 import { Input } from "~/core/components/ui/input";
 import { Label } from "~/core/components/ui/label";
+import resendClient from "~/core/lib/resend-client.server";
 import makeServerClient from "~/core/lib/supa-client.server";
 
 import { SignUpButtons } from "../components/auth-login-buttons";
@@ -143,6 +144,43 @@ export async function action({ request }: Route.ActionArgs) {
     return data({ error: signInError.message }, { status: 400 });
   }
 
+  // Send welcome email directly via Resend using Korean template
+  try {
+    await resendClient.emails.send({
+      from:
+        process.env.NODE_ENV === "development"
+          ? "Test <test@resend.dev>"
+          : "싱크로 <onboarding@yourdomain.com>",
+      to: validData.email,
+      subject:
+        "싱크로에 오신 것을 환영합니다! 동영상 업로드하고 AI 업무프로세스를 바로 확인하세요",
+      html: `
+        <div style="font-family: sans-serif; max-width: 560px; margin: 0 auto; padding: 20px;">
+          <h2 style="text-align: center; color: #333;">싱크로에 오신 것을 환영합니다</h2>
+          <p style="color: #666; line-height: 1.6;">
+            안녕하세요, ${validData.name}님!<br><br>
+            싱크로 가입을 진심으로 환영합니다. 이제 동영상을 업로드하면 AI가 자동으로 업무프로세스를 분석해주는 현대적인 웹 애플리케이션을 경험할 수 있게 되었어요.<br><br>
+            가입을 완료하시면 동영상 업로드, AI 분석, 자동 카드 생성, 팀원 공유 등의 기능을 바로 사용하실 수 있습니다. 첫 동영상을 업로드하고 AI가 생성한 업무프로세스를 확인해보세요.<br><br>
+            궁금한 점이 있으시면 언제든지 문의해주세요. 싱크로와 함께 스마트한 업무 관리를 시작해보세요!<br><br>
+            지금 바로 이메일 인증을 완료하고 첫 번째 업무프로세스를 생성해보세요!
+          </p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${process.env.SITE_URL}/auth/verify" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+              이메일 인증하기
+            </a>
+          </div>
+          <p style="color: #999; font-size: 12px;">
+            감사합니다,<br>
+            싱크로 팀 드림
+          </p>
+        </div>
+      `,
+    });
+  } catch (emailError) {
+    // Log error but don't fail the signup process
+    console.error("Failed to send welcome email:", emailError);
+  }
+
   // Return success response - redirect to login page with success message
   return redirect("/login?message=signup_success");
 }
@@ -175,10 +213,7 @@ export default function Join({ actionData }: Route.ComponentProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <Form
-            className="flex w-full flex-col gap-5"
-            method="post"
-          >
+          <Form className="flex w-full flex-col gap-5" method="post">
             <div className="flex flex-col items-start space-y-2">
               <Label htmlFor="name" className="flex flex-col items-start gap-1">
                 이름
@@ -300,7 +335,7 @@ export default function Join({ actionData }: Route.ComponentProps) {
       </Card>
       <div className="flex flex-col items-center justify-center text-sm">
         <p className="text-muted-foreground">
-          이미 계정이 있으신가요? {" "}
+          이미 계정이 있으신가요?{" "}
           <Link
             to="/login"
             viewTransition

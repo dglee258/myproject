@@ -1,8 +1,5 @@
 import type { Route } from "./+types/business-logic";
 
-import makeServerClient from "~/core/lib/supa-client.server";
-import { getUserWorkflows } from "../queries.server";
-
 import {
   ArrowRight,
   Bot,
@@ -11,7 +8,10 @@ import {
   ChevronRight,
   Clock,
   Edit,
+  Edit3,
+  FileText,
   FileVideo,
+  Image as ImageIcon,
   Lightbulb,
   Loader2,
   Maximize,
@@ -24,14 +24,26 @@ import {
   Volume2,
   X,
 } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
-import { Link, useFetcher, useRevalidator, data, useNavigate, useSearchParams } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Link,
+  data,
+  useFetcher,
+  useNavigate,
+  useRevalidator,
+  useSearchParams,
+} from "react-router";
 import { toast } from "sonner";
 
 import { Badge } from "~/core/components/ui/badge";
 import { BorderBeam } from "~/core/components/ui/border-beam";
 import { Button } from "~/core/components/ui/button";
-import { Card } from "~/core/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "~/core/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -40,9 +52,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/core/components/ui/dialog";
+import { Input } from "~/core/components/ui/input";
 import { Label } from "~/core/components/ui/label";
 import { ShineBorder } from "~/core/components/ui/shine-border";
 import { Textarea } from "~/core/components/ui/textarea";
+import makeServerClient from "~/core/lib/supa-client.server";
+
+import { getUserWorkflows } from "../queries.server";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -65,11 +81,11 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 
   const workflows = await getUserWorkflows(user.id);
-  
+
   return { workflows };
 }
 
-// 메모 저장 action
+// 메모 저장 및 스텝 편집 action
 export async function action({ request }: Route.ActionArgs) {
   const [client] = makeServerClient(request);
   const {
@@ -82,24 +98,71 @@ export async function action({ request }: Route.ActionArgs) {
 
   try {
     const formData = await request.formData();
-    const stepId = parseInt(formData.get("stepId") as string);
-    const notes = formData.get("notes") as string;
+    const actionType = formData.get("actionType") as string;
 
-    if (isNaN(stepId)) {
-      return data({ error: "Invalid step ID" }, { status: 400 });
+    if (actionType === "updateNotes") {
+      const stepId = parseInt(formData.get("stepId") as string);
+      const notes = formData.get("notes") as string;
+
+      if (isNaN(stepId)) {
+        return data({ error: "Invalid step ID" }, { status: 400 });
+      }
+
+      // DB 업데이트
+      const { updateStepNotes } = await import("../queries.server");
+      await updateStepNotes(stepId, notes || "");
+
+      return data({ success: true, message: "메모가 저장되었습니다" });
+    } else if (actionType === "updateStep") {
+      const stepId = parseInt(formData.get("stepId") as string);
+      const action = formData.get("action") as string;
+      const description = formData.get("description") as string;
+
+      if (isNaN(stepId)) {
+        return data({ error: "Invalid step ID" }, { status: 400 });
+      }
+
+      // DB 업데이트
+      const { updateStepDetails } = await import("../queries.server");
+      await updateStepDetails(stepId, action, description);
+
+      return data({ success: true, message: "스텝이 수정되었습니다" });
+    } else if (actionType === "deleteStep") {
+      const stepId = parseInt(formData.get("stepId") as string);
+
+      if (isNaN(stepId)) {
+        return data({ error: "Invalid step ID" }, { status: 400 });
+      }
+
+      // DB 삭제
+      const { deleteStep } = await import("../queries.server");
+      await deleteStep(stepId);
+
+      return data({ success: true, message: "스텝이 삭제되었습니다" });
+    } else if (actionType === "addStep") {
+      const workflowId = parseInt(formData.get("workflowId") as string);
+      const sequenceNo = parseInt(formData.get("sequenceNo") as string);
+      const action = formData.get("action") as string;
+      const description = formData.get("description") as string;
+
+      if (isNaN(workflowId) || isNaN(sequenceNo)) {
+        return data(
+          { error: "Invalid workflow ID or sequence number" },
+          { status: 400 },
+        );
+      }
+
+      // DB 추가
+      const { addStep } = await import("../queries.server");
+      await addStep(workflowId, sequenceNo, action, description);
+
+      return data({ success: true, message: "새 단계가 추가되었습니다" });
     }
 
-    // DB 업데이트
-    const { updateStepNotes } = await import("../queries.server");
-    await updateStepNotes(stepId, notes || "");
-
-    return data({ success: true, message: "메모가 저장되었습니다" });
+    return data({ error: "Invalid action type" }, { status: 400 });
   } catch (error) {
-    console.error("Update notes error:", error);
-    return data(
-      { error: "Failed to update notes" },
-      { status: 500 },
-    );
+    console.error("Action error:", error);
+    return data({ error: "Failed to process request" }, { status: 500 });
   }
 }
 
@@ -146,36 +209,45 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const teamId = searchParams.get("teamId");
-  
-  // Transform database workflows to VideoAnalysis format (메모이제이션)
-  const mockVideos: VideoAnalysis[] = useMemo(() => dbWorkflows.map((workflow: any) => {
-    // Generate Supabase Storage URL if storage_path exists
-    const videoUrl = workflow.sourceVideo?.storage_path
-      ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/work-videos/${workflow.sourceVideo.storage_path}`
-      : undefined;
 
-    return {
-      id: workflow.workflow_id.toString(),
-      title: workflow.title,
-      duration: formatDuration(workflow.duration_seconds),
-      uploadDate: formatDate(workflow.created_at),
-      status: workflow.status as "analyzed" | "analyzing" | "pending",
-      thumbnail: workflow.thumbnail_url || "/placeholder-video.jpg",
-      videoUrl,
-      steps: (workflow.steps || [])
-        .sort((a: any, b: any) => a.sequence_no - b.sequence_no)
-        .map((step: any) => ({
-          id: step.step_id,
-          action: step.action,
-          description: step.description,
-          timestamp: formatDuration(step.timestamp_seconds),
-          confidence: step.confidence || 0,
-          type: step.type as "click" | "input" | "navigate" | "wait" | "decision",
-          screenshot_url: step.screenshot_url || undefined,
-          notes: step.notes || undefined,
-        })),
-    };
-  }), [dbWorkflows]);
+  // Transform database workflows to VideoAnalysis format (메모이제이션)
+  const mockVideos: VideoAnalysis[] = useMemo(
+    () =>
+      dbWorkflows.map((workflow: any) => {
+        // Generate Supabase Storage URL if storage_path exists
+        const videoUrl = workflow.sourceVideo?.storage_path
+          ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/work-videos/${workflow.sourceVideo.storage_path}`
+          : undefined;
+
+        return {
+          id: workflow.workflow_id.toString(),
+          title: workflow.title,
+          duration: formatDuration(workflow.duration_seconds),
+          uploadDate: formatDate(workflow.created_at),
+          status: workflow.status as "analyzed" | "analyzing" | "pending",
+          thumbnail: workflow.thumbnail_url || "/placeholder-video.jpg",
+          videoUrl,
+          steps: (workflow.steps || [])
+            .sort((a: any, b: any) => a.sequence_no - b.sequence_no)
+            .map((step: any) => ({
+              id: step.step_id,
+              action: step.action,
+              description: step.description,
+              timestamp: formatDuration(step.timestamp_seconds),
+              confidence: step.confidence || 0,
+              type: step.type as
+                | "click"
+                | "input"
+                | "navigate"
+                | "wait"
+                | "decision",
+              screenshot_url: step.screenshot_url || undefined,
+              notes: step.notes || undefined,
+            })),
+        };
+      }),
+    [dbWorkflows],
+  );
 
   const [selectedVideo, setSelectedVideo] = useState<VideoAnalysis | null>(
     mockVideos[0] || null,
@@ -187,10 +259,14 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   const [editNotes, setEditNotes] = useState("");
   const [isVideoPlayerOpen, setIsVideoPlayerOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [editedSteps, setEditedSteps] = useState<
+    Map<number, { action: string; description: string }>
+  >(new Map());
 
   // 비디오 변경 시 수정 모드 리셋
   useEffect(() => {
     setIsEditMode(false);
+    setEditedSteps(new Map());
   }, [selectedVideo?.id]);
 
   const toggleStep = (stepId: number) => {
@@ -232,7 +308,7 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
     setIsEditDialogOpen(false);
     setEditingStep(null);
     setEditNotes("");
-    
+
     toast.success("메모가 저장되었습니다");
   };
 
@@ -247,19 +323,100 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   useEffect(() => {
     if (selectedVideo) {
       const updatedVideo = mockVideos.find((v) => v.id === selectedVideo.id);
-      if (updatedVideo && JSON.stringify(updatedVideo) !== JSON.stringify(selectedVideo)) {
+      if (
+        updatedVideo &&
+        JSON.stringify(updatedVideo) !== JSON.stringify(selectedVideo)
+      ) {
         setSelectedVideo(updatedVideo);
       }
     }
   }, [dbWorkflows]); // mockVideos 대신 dbWorkflows를 의존성으로 사용
 
   const handleEditProcess = () => {
-    setIsEditMode(!isEditMode);
     if (!isEditMode) {
+      // Initialize edited steps with current values when entering edit mode
+      const newEditedSteps = new Map<
+        number,
+        { action: string; description: string }
+      >();
+      selectedVideo?.steps.forEach((step) => {
+        newEditedSteps.set(step.id, {
+          action: step.action,
+          description: step.description,
+        });
+      });
+      setEditedSteps(newEditedSteps);
       toast.success("수정 모드가 활성화되었습니다");
     } else {
+      // Save all edited steps
+      editedSteps.forEach((editedStep, stepId) => {
+        const originalStep = selectedVideo?.steps.find((s) => s.id === stepId);
+        if (
+          originalStep &&
+          (originalStep.action !== editedStep.action ||
+            originalStep.description !== editedStep.description)
+        ) {
+          const formData = new FormData();
+          formData.append("actionType", "updateStep");
+          formData.append("stepId", stepId.toString());
+          formData.append("action", editedStep.action);
+          formData.append("description", editedStep.description);
+          fetcher.submit(formData, { method: "post" });
+        }
+      });
+      setEditedSteps(new Map());
       toast.success("변경사항이 저장되었습니다");
     }
+    setIsEditMode(!isEditMode);
+  };
+
+  const handleStepTitleChange = (stepId: number, newTitle: string) => {
+    setEditedSteps((prev) => {
+      const newMap = new Map(prev);
+      const current = newMap.get(stepId) || { action: "", description: "" };
+      newMap.set(stepId, { ...current, action: newTitle });
+      return newMap;
+    });
+  };
+
+  const handleStepDescriptionChange = (
+    stepId: number,
+    newDescription: string,
+  ) => {
+    setEditedSteps((prev) => {
+      const newMap = new Map(prev);
+      const current = newMap.get(stepId) || { action: "", description: "" };
+      newMap.set(stepId, { ...current, description: newDescription });
+      return newMap;
+    });
+  };
+
+  const handleAddStep = async () => {
+    if (!selectedVideo) return;
+
+    const newSequenceNo = selectedVideo.steps.length + 1;
+    const formData = new FormData();
+    formData.append("actionType", "addStep");
+    formData.append("workflowId", selectedVideo.id);
+    formData.append("sequenceNo", newSequenceNo.toString());
+    formData.append("action", "새 단계");
+    formData.append("description", "");
+
+    fetcher.submit(formData, { method: "post" });
+    toast.success("새 단계가 추가되었습니다");
+  };
+
+  const handleDeleteStep = async (stepId: number) => {
+    const formData = new FormData();
+    formData.append("actionType", "deleteStep");
+    formData.append("stepId", stepId.toString());
+
+    fetcher.submit(formData, { method: "post" });
+    toast.success("단계가 삭제되었습니다");
+  };
+
+  const getEditedStep = (stepId: number) => {
+    return editedSteps.get(stepId);
   };
 
   const getStepIcon = (type: LogicStep["type"]) => {
@@ -297,105 +454,93 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   };
 
   return (
-    <div className="container mx-auto max-w-7xl p-4 sm:p-6">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="mb-2 text-2xl font-bold sm:text-3xl">
-              업무 프로세스
-            </h1>
-            <p className="text-muted-foreground text-sm sm:text-base">
-              업무 동영상을 업로드하면 AI가 자동으로 프로세스를 분석해드려요
-            </p>
-          </div>
-          <Button 
-            size="lg" 
-            className="w-full sm:w-auto sm:shrink-0"
-            onClick={() => {
-              console.log('Upload button clicked');
-              const uploadUrl = teamId ? `/work/upload?teamId=${teamId}` : '/work/upload';
-              navigate(uploadUrl);
-            }}
-          >
-            <Plus className="mr-2 size-4" />
-            동영상 업로드
-          </Button>
-        </div>
+    <div className="flex h-[calc(100vh-4rem)]">
+      {/* Sidebar */}
+      <div className="bg-muted/30 flex w-16 flex-col items-center gap-4 border-r py-4">
+        <Button variant="ghost" size="icon" className="rounded-lg">
+          <FileText className="h-5 w-5" />
+        </Button>
+        <Button variant="ghost" size="icon" className="rounded-lg">
+          <Clock className="h-5 w-5" />
+        </Button>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Video List Sidebar */}
-        <div className="md:col-span-2 lg:col-span-1">
-          <Card className="p-4">
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-              <FileVideo className="size-5" />
-              업무 목록
-            </h2>
-            <div className="space-y-3">
-              {mockVideos.map((video) => (
-                <button
-                  key={video.id}
-                  onClick={() => setSelectedVideo(video)}
-                  className={`hover:bg-muted w-full rounded-lg border p-3 text-left transition-colors ${
-                    selectedVideo?.id === video.id
-                      ? "border-primary bg-primary/5"
-                      : "border-border"
-                  }`}
-                >
-                  <div className="mb-2 flex items-start gap-3">
-                    <div className="bg-muted flex size-12 shrink-0 items-center justify-center rounded">
-                      <FileVideo className="text-muted-foreground size-6" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="line-clamp-2 text-sm font-medium">
-                        {video.title}
-                      </h3>
-                      <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
-                        <Clock className="size-3" />
-                        {video.duration}
-                      </div>
+      {/* Process List */}
+      <div className="bg-background w-80 border-r">
+        <div className="border-b p-4">
+          <h2 className="mb-1">업무 목록</h2>
+          <p className="text-muted-foreground text-sm">
+            업무 목록을 관리하고 작업 내용을 프로세스로 문서화하세요
+          </p>
+        </div>
+
+        <div className="h-[calc(100vh-10rem)] overflow-auto">
+          <div className="space-y-2 p-4">
+            {mockVideos.map((video) => (
+              <Card
+                key={video.id}
+                className={`cursor-pointer transition-all hover:shadow-md ${
+                  selectedVideo?.id === video.id
+                    ? "border-[#4169E1] bg-[#4169E1]/5"
+                    : ""
+                }`}
+                onClick={() => {
+                  setSelectedVideo(video);
+                  setIsEditMode(false);
+                  setEditedSteps(new Map());
+                }}
+              >
+                <CardContent className="p-4">
+                  <div className="mb-2 flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileVideo className="text-muted-foreground h-4 w-4" />
+                      <span className="font-medium">{video.title}</span>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between text-sm">
                     <Badge
-                      variant={
-                        video.status === "analyzed" ? "default" : "secondary"
+                      className={
+                        video.status === "analyzed"
+                          ? "bg-green-500 hover:bg-green-600"
+                          : video.status === "analyzing"
+                            ? "bg-blue-500 hover:bg-blue-600"
+                            : "bg-gray-500 hover:bg-gray-600"
                       }
-                      className="text-xs"
                     >
                       {video.status === "analyzed"
-                        ? "✅ 분석 완료"
+                        ? "분석 완료"
                         : video.status === "analyzing"
-                          ? "⏳ 분석 중"
-                          : "⏸️ 대기 중"}
+                          ? "진행 중"
+                          : "대기"}
                     </Badge>
-                    <span className="text-muted-foreground text-xs">
+                    <span className="text-muted-foreground">
                       {video.uploadDate}
                     </span>
                   </div>
-                </button>
-              ))}
-            </div>
-          </Card>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
+      </div>
 
-        {/* Main Content - Logic Flow */}
-        <div className="md:col-span-2 lg:col-span-2">
-          {selectedVideo ? (
-            <Card className="p-6">
-              {/* Video Header */}
-              <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex-1">
-                  <h2 className="mb-2 text-xl font-bold sm:text-2xl">
-                    {selectedVideo.title}
-                  </h2>
-                  <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm sm:gap-4">
-                    <span className="flex items-center gap-1">
-                      <Clock className="size-4" />
+      {/* Main Content */}
+      <div className="flex-1 overflow-hidden">
+        {selectedVideo ? (
+          <div className="flex h-full flex-col">
+            {/* Header */}
+            <div className="border-b p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h1 className="mb-2">{selectedVideo.title}</h1>
+                  <div className="text-muted-foreground flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
                       {selectedVideo.duration}
-                    </span>
-                    <span>{selectedVideo.uploadDate}</span>
+                    </div>
+                    <Badge variant="secondary">
+                      {selectedVideo.uploadDate}
+                    </Badge>
                     {selectedVideo.status === "analyzed" && (
                       <Badge
                         variant="outline"
@@ -405,178 +550,148 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                         AI 분석 완료
                       </Badge>
                     )}
-                    {selectedVideo.status === "analyzing" && (
-                      <Badge
-                        variant="outline"
-                        className="flex items-center gap-1"
-                      >
-                        <Loader2 className="size-3 animate-spin" />
-                        AI 분석 중
-                      </Badge>
-                    )}
-                    {selectedVideo.status === "pending" && (
-                      <Badge
-                        variant="outline"
-                        className="text-muted-foreground flex items-center gap-1"
-                      >
-                        <Clock className="size-3" />
-                        분석 대기
-                      </Badge>
-                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full sm:w-auto sm:shrink-0"
                     onClick={() => setIsVideoPlayerOpen(true)}
                   >
                     <Play className="mr-2 size-4" />
                     원본 동영상 보기
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                    onClick={async () => {
-                      if (confirm('이 프로세스를 삭제하시겠습니까?')) {
-                        try {
-                          const res = await fetch(`/api/work/workflows/${selectedVideo.id}`, {
-                            method: 'DELETE',
-                          });
-                          if (res.ok) {
-                            toast.success('프로세스가 삭제되었습니다');
-                            revalidator.revalidate();
-                            setSelectedVideo(mockVideos.filter(v => v.id !== selectedVideo.id)[0] || null);
-                          } else {
-                            toast.error('삭제에 실패했습니다');
-                          }
-                        } catch (error) {
-                          toast.error('삭제 중 오류가 발생했습니다');
-                        }
-                      }
-                    }}
-                  >
-                    <Trash2 className="mr-2 size-4" />
-                    삭제
-                  </Button>
+                  {isEditMode ? (
+                    <>
+                      <Button variant="outline" onClick={handleEditProcess}>
+                        <X className="mr-2 h-4 w-4" />
+                        취소
+                      </Button>
+                      <Button onClick={handleEditProcess}>
+                        <Save className="mr-2 h-4 w-4" />
+                        저장
+                      </Button>
+                    </>
+                  ) : (
+                    <Button onClick={handleEditProcess}>
+                      <Edit3 className="mr-2 h-4 w-4" />
+                      수정 모드
+                    </Button>
+                  )}
                 </div>
               </div>
+            </div>
 
-              {/* Logic Steps */}
-              {selectedVideo.status === "analyzed" ? (
-                <div className="space-y-4">
-                  {/* 수정 모드 알림 */}
-                  {isEditMode && (
-                    <div className="rounded-lg border-2 border-purple-500 bg-purple-100 p-4 shadow-lg dark:border-purple-400 dark:bg-purple-950 animate-in fade-in slide-in-from-top-2 duration-300">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="rounded-full bg-purple-500 p-2">
-                            <Edit className="size-5 text-white" />
+            {/* Content */}
+            <div className="flex-1 overflow-auto">
+              <div className="p-6">
+                {selectedVideo.status === "analyzed" ? (
+                  <>
+                    {/* 수정 모드 알림 */}
+                    {isEditMode && (
+                      <div className="animate-in fade-in slide-in-from-top-2 mb-6 rounded-lg border-2 border-purple-500 bg-purple-100 p-4 shadow-lg duration-300 dark:border-purple-400 dark:bg-purple-950">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="rounded-full bg-purple-500 p-2">
+                              <Edit className="size-5 text-white" />
+                            </div>
+                            <div>
+                              <h4 className="flex items-center gap-2 font-bold text-purple-900 dark:text-purple-100">
+                                ✏️ 수정 모드 활성화
+                                <Badge
+                                  variant="default"
+                                  className="bg-purple-600"
+                                >
+                                  편집 중
+                                </Badge>
+                              </h4>
+                              <p className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                                각 단계의 제목과 설명을 직접 수정할 수 있습니다.
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="font-bold text-purple-900 dark:text-purple-100 flex items-center gap-2">
-                              ✏️ 수정 모드 활성화
-                              <Badge variant="default" className="bg-purple-600">편집 중</Badge>
-                            </h4>
-                            <p className="text-sm font-medium text-purple-700 dark:text-purple-300">
-                              각 단계 카드를 클릭하면 메모를 추가하거나 수정할 수 있습니다.
-                            </p>
-                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsEditMode(false)}
+                            className="text-purple-700 hover:text-purple-900 dark:text-purple-300"
+                          >
+                            <X className="size-4" />
+                          </Button>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setIsEditMode(false)}
-                          className="text-purple-700 hover:text-purple-900 dark:text-purple-300"
-                        >
-                          <X className="size-4" />
-                        </Button>
                       </div>
-                    </div>
-                  )}
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className="flex items-center gap-2 text-lg font-semibold">
-                      <Sparkles className="text-primary size-5" />
-                      단계별 업무 프로세스
-                    </h3>
-                    <p className="text-muted-foreground mt-1 text-xs">
-                      클릭하거나 마우스를 올려 상세 내용을 확인하세요
-                    </p>
-                    {/* <Button variant="outline" size="sm">
-                      순서도로 보기
-                    </Button> */}
-                  </div>
+                    )}
 
-                  <div className="relative space-y-8">
-                    {selectedVideo.steps.map((step, index) => (
-                      <div key={step.id} className="relative">
-                        {/* Step Card */}
-                        <div
-                          onMouseEnter={() => setHoveredStep(step.id)}
-                          onMouseLeave={() => setHoveredStep(null)}
-                          onClick={() => toggleStep(step.id)}
-                          className={`group relative cursor-pointer rounded-lg border transition-all duration-300 ${
-                            isStepOpen(step.id)
-                              ? "border-primary bg-primary/5 shadow-primary/20 shadow-lg"
-                              : "border-border bg-card hover:border-primary/50 hover:shadow-md"
-                          }`}
+                    <div className="mb-6 flex items-center justify-between">
+                      <h2>단계별 업무 프로세스</h2>
+                      {isEditMode && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAddStep}
                         >
-                          {/* Magic UI: Border Beam - hover 시 테두리 빔 효과 */}
-                          {hoveredStep === step.id &&
-                            !expandedSteps.includes(step.id) && (
-                              <BorderBeam size={200} duration={8} delay={0} />
-                            )}
+                          <Plus className="mr-2 h-4 w-4" />
+                          단계 추가
+                        </Button>
+                      )}
+                    </div>
 
-                          {/* Magic UI: Shine Border - 고정된 카드에 빛나는 효과 */}
-                          {expandedSteps.includes(step.id) && (
-                            <ShineBorder
-                              borderWidth={3}
-                              duration={3}
-                              shineColor={[
-                                "#a78bfa",
-                                "#818cf8",
-                                "#6366f1",
-                                "#8b5cf6",
-                              ]}
-                            />
-                          )}
+                    <div className="space-y-4">
+                      {selectedVideo.steps.map((step, index) => {
+                        const editedStep = getEditedStep(step.id);
+                        const currentAction = editedStep?.action || step.action;
+                        const currentDescription =
+                          editedStep?.description || step.description;
 
-                          <div className="p-4 transition-transform duration-300 group-hover:scale-[1.01]">
-                            <div className="flex items-start gap-4">
-                              {/* Step Number */}
-                              <div className="bg-primary text-primary-foreground flex size-12 shrink-0 items-center justify-center rounded-full text-lg font-bold">
-                                {index + 1}
-                              </div>
-
-                              {/* Step Content */}
-                              <div className="flex-1">
-                                <div className="mb-2 flex items-start justify-between gap-2">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xl">
-                                      {getStepIcon(step.type)}
-                                    </span>
-                                    <h4 className="font-semibold">
-                                      {step.action}
-                                    </h4>
-                                  </div>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleStep(step.id);
-                                    }}
-                                    className="text-muted-foreground hover:text-foreground transition-colors"
-                                  >
-                                    {expandedSteps.includes(step.id) ? (
-                                      <ChevronDown className="size-5" />
-                                    ) : (
-                                      <ChevronRight className="size-5" />
-                                    )}
-                                  </button>
+                        return (
+                          <Card
+                            key={step.id}
+                            className={`overflow-hidden transition-all duration-300 ${
+                              isEditMode
+                                ? "shadow-purple-20/20 border-purple-300 bg-white hover:border-purple-400 hover:bg-purple-100 hover:shadow-lg dark:border-purple-600 dark:bg-purple-50/50 dark:hover:bg-purple-100"
+                                : ""
+                            }`}
+                          >
+                            <CardContent className="p-0">
+                              {/* Step Header */}
+                              <div
+                                className={`flex items-center gap-4 border-b p-4 ${
+                                  isEditMode ? "bg-purple-50/50" : "bg-muted/30"
+                                }`}
+                              >
+                                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#4169E1] text-white">
+                                  <span className="text-sm font-medium">
+                                    {index + 1}
+                                  </span>
                                 </div>
-
-                                <div className="flex items-center gap-3">
+                                <div className="min-w-0 flex-1">
+                                  {isEditMode ? (
+                                    <Input
+                                      value={currentAction}
+                                      onChange={(e) =>
+                                        handleStepTitleChange(
+                                          step.id,
+                                          e.target.value,
+                                        )
+                                      }
+                                      className="border-purple-300 font-medium focus:border-purple-500"
+                                    />
+                                  ) : (
+                                    <h3
+                                      className={`font-semibold ${
+                                        isEditMode
+                                          ? "border-b-2 border-dashed border-purple-300 pb-1 text-purple-900 dark:text-purple-100"
+                                          : ""
+                                      }`}
+                                    >
+                                      {currentAction}
+                                      {isEditMode && (
+                                        <Edit className="ml-2 inline-block size-3 text-purple-500" />
+                                      )}
+                                    </h3>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
                                   <Badge
                                     variant="secondary"
                                     className={getStepColor(step.type)}
@@ -587,50 +702,82 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                                     {step.type === "wait" && "대기"}
                                     {step.type === "decision" && "판단"}
                                   </Badge>
-                                  {step.timestamp && step.timestamp !== "0:00" && (
-                                    <span className="text-muted-foreground text-sm">
-                                      {step.timestamp}
-                                    </span>
+                                  {step.timestamp &&
+                                    step.timestamp !== "0:00" && (
+                                      <span className="text-muted-foreground text-sm">
+                                        {step.timestamp}
+                                      </span>
+                                    )}
+                                  {isEditMode && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleDeleteStep(step.id)}
+                                    >
+                                      <Trash2 className="text-destructive h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  {!isEditMode && (
+                                    <ChevronRight className="text-muted-foreground h-4 w-4" />
                                   )}
                                 </div>
+                              </div>
 
-                                {/* Expanded Details */}
-                                {isStepOpen(step.id) && (
-                                  <div className="mt-3 space-y-3">
-                                    {/* 스크린샷 이미지 */}
-                                    {step.screenshot_url && (
-                                      <div className="rounded-lg overflow-hidden border border-border">
-                                        <img
-                                          src={step.screenshot_url}
-                                          alt={`${step.action} 스크린샷`}
-                                          className="w-full h-auto"
-                                          loading="lazy"
-                                        />
-                                      </div>
-                                    )}
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                      <p className="text-muted-foreground text-sm">
-                                        {step.description}
-                                      </p>
-                                      {step.type === "decision" && (
-                                        <div className="mt-3 flex gap-2">
-                                          <Badge
-                                            variant="outline"
-                                            className="text-green-600"
-                                          >
-                                            ✓ 조건 충족 시
-                                          </Badge>
-                                          <Badge
-                                            variant="outline"
-                                            className="text-red-600"
-                                          >
-                                            ✗ 조건 미충족 시
-                                          </Badge>
-                                        </div>
-                                      )}
-                                    </div>
+                              {/* Step Content */}
+                              <div className="space-y-4 p-4">
+                                {/* Screenshot */}
+                                {step.screenshot_url && (
+                                  <div className="bg-muted relative aspect-video overflow-hidden rounded-lg">
+                                    <img
+                                      src={step.screenshot_url}
+                                      alt={currentAction}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  </div>
+                                )}
 
-                                    {/* 추가 설명 섹션 */}
+                                {/* Description */}
+                                {isEditMode ? (
+                                  <div>
+                                    <label className="mb-2 block text-sm font-medium">
+                                      설명
+                                    </label>
+                                    <Textarea
+                                      value={currentDescription}
+                                      onChange={(e) =>
+                                        handleStepDescriptionChange(
+                                          step.id,
+                                          e.target.value,
+                                        )
+                                      }
+                                      placeholder="이 단계에 대한 설명을 입력하세요"
+                                      rows={3}
+                                      className="resize-none border-purple-300 focus:border-purple-500"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div
+                                    className={`bg-muted/50 rounded-lg p-3 ${
+                                      isEditMode
+                                        ? "border border-purple-200 bg-purple-100 dark:border-purple-700 dark:bg-purple-900"
+                                        : ""
+                                    }`}
+                                  >
+                                    <p
+                                      className={`text-muted-foreground text-sm ${
+                                        isEditMode
+                                          ? "text-purple-800 dark:text-purple-200"
+                                          : ""
+                                      }`}
+                                    >
+                                      {currentDescription}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {/* Notes Section */}
+                                {!isEditMode && (
+                                  <>
                                     {step.notes ? (
                                       <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950">
                                         <div className="mb-2 flex items-center justify-between">
@@ -666,79 +813,95 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                                         단계에 메모 추가하기
                                       </Button>
                                     )}
-                                  </div>
+                                  </>
                                 )}
                               </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+
+                    {/* Helpful Note */}
+                    {!isEditMode && (
+                      <Card className="bg-muted/30 mt-6 border-dashed">
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100">
+                              <span className="text-lg">💡</span>
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm">
+                                각 단계에 메모를 추가하면 팀원과 상세한 업무
+                                프로세스를 공유할 수 있어요!
+                              </p>
+                              <Button
+                                variant="link"
+                                className="mt-2 h-auto px-0 text-sm"
+                                onClick={handleEditProcess}
+                              >
+                                프로세스 수정하기
+                              </Button>
                             </div>
                           </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="border-primary/50 bg-primary/5 mt-8 rounded-lg border border-dashed p-4">
-                    <div className="flex items-start gap-3">
-                      <Lightbulb className="text-primary mt-0.5 size-5 shrink-0" />
-                      <div className="flex-1">
-                        <h4 className="mb-1 text-sm font-semibold">
-                          팁: 각 단계에 메모를 추가하면 팀원들이 업무를 더 쉽게
-                          이해할 수 있어요
-                        </h4>
-
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full sm:w-auto"
-                            onClick={handleEditProcess}
-                          >
-                            <Edit className="mr-2 size-3" />
-                            {isEditMode ? "수정 완료" : "프로세스 수정하기"}
-                          </Button>
-                        </div>
-                      </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="relative mb-4">
+                      <Bot className="text-primary size-16 animate-pulse" />
+                      <Sparkles className="text-primary absolute -top-1 -right-1 size-6 animate-bounce" />
                     </div>
+                    <h3 className="mb-2 text-lg font-semibold">
+                      ✨ AI가 열심히 분석하고 있어요
+                    </h3>
+                    <p className="text-muted-foreground mb-1 text-sm">
+                      동영상에서 업무 프로세스를 추출하는 중이에요
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      잠시만 기다려주세요 (1-2분 소요)
+                    </p>
                   </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="relative mb-4">
-                    <Bot className="text-primary size-16 animate-pulse" />
-                    <Sparkles className="text-primary absolute -top-1 -right-1 size-6 animate-bounce" />
-                  </div>
-                  <h3 className="mb-2 text-lg font-semibold">
-                    ✨ AI가 열심히 분석하고 있어요
-                  </h3>
-                  <p className="text-muted-foreground mb-1 text-sm">
-                    동영상에서 업무 프로세스를 추출하는 중이에요
-                  </p>
-                  <p className="text-muted-foreground text-xs">
-                    잠시만 기다려주세요 (1-2분 소요)
-                  </p>
-                </div>
-              )}
-            </Card>
-          ) : (
-            <Card className="flex flex-col items-center justify-center p-12 text-center">
-              <div className="bg-muted mb-4 rounded-full p-4">
-                <FileVideo className="text-muted-foreground size-16" />
+                )}
               </div>
-              <h3 className="mb-2 text-xl font-semibold">
-                👋 어떤 업무를 분석할까요?
-              </h3>
-              <p className="text-muted-foreground mb-6 max-w-md text-sm">
-                왼쪽에서 분석된 동영상을 선택하거나,
-                <br />
-                새로운 업무 동영상을 업로드해보세요
-              </p>
-              
-            </Card>
-          )}
-        </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <div className="text-center">
+              <FileVideo className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
+              <p className="text-muted-foreground">업무를 선택해주세요</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* 추가 설명 편집 다이얼로그 */}
+      {/* Video Player Dialog */}
+      <Dialog open={isVideoPlayerOpen} onOpenChange={setIsVideoPlayerOpen}>
+        <DialogContent className="sm:max-w-[800px]">
+          <DialogHeader>
+            <DialogTitle>원본 동영상 보기</DialogTitle>
+            <DialogDescription>{selectedVideo?.title}</DialogDescription>
+          </DialogHeader>
+          <div className="aspect-video overflow-hidden rounded-lg bg-black">
+            {selectedVideo?.videoUrl ? (
+              <video
+                src={selectedVideo.videoUrl}
+                controls
+                className="h-full w-full"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-white">
+                <FileVideo className="size-16" />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notes Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
@@ -781,92 +944,11 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                 setEditNotes("");
               }}
             >
-              <X className="mr-2 size-4" />
               취소
             </Button>
-            <Button onClick={handleSaveNotes} disabled={fetcher.state === "submitting"}>
-              {fetcher.state === "submitting" ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  저장 중...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 size-4" />
-                  저장
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Video Player Dialog */}
-      <Dialog open={isVideoPlayerOpen} onOpenChange={setIsVideoPlayerOpen}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileVideo className="size-5" />
-              {selectedVideo?.title}
-            </DialogTitle>
-            <DialogDescription>
-              원본 동영상을 재생하여 업무 프로세스를 확인하세요.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* Video Player */}
-            <div className="bg-black relative aspect-video w-full overflow-hidden rounded-lg">
-              {selectedVideo?.videoUrl ? (
-                <video
-                  className="h-full w-full"
-                  controls
-                  controlsList="nodownload"
-                  poster={selectedVideo?.thumbnail}
-                  src={selectedVideo.videoUrl}
-                >
-                  브라우저가 비디오를 지원하지 않습니다.
-                </video>
-              ) : (
-                <div className="flex h-full items-center justify-center text-white">
-                  <div className="text-center">
-                    <FileVideo className="mx-auto size-12 mb-4 opacity-50" />
-                    <p>동영상을 불러올 수 없습니다</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Video Info */}
-            <div className="bg-muted/50 flex flex-wrap items-center gap-4 rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <Clock className="text-muted-foreground size-4" />
-                <span className="text-sm">
-                  재생 시간: {selectedVideo?.duration}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileVideo className="text-muted-foreground size-4" />
-                <span className="text-sm">
-                  업로드: {selectedVideo?.uploadDate}
-                </span>
-              </div>
-              {selectedVideo?.status === "analyzed" && (
-                <Badge variant="outline" className="flex items-center gap-1">
-                  <CheckCircle2 className="size-3" />
-                  분석 완료 ({selectedVideo.steps.length}단계)
-                </Badge>
-              )}
-            </div>
-
-            {/* Playback Tips */}
-            {/*  */}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsVideoPlayerOpen(false)}
-            >
-              닫기
+            <Button onClick={handleSaveNotes}>
+              <Save className="mr-2 h-4 w-4" />
+              저장
             </Button>
           </DialogFooter>
         </DialogContent>

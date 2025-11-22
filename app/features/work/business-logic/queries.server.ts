@@ -1,15 +1,18 @@
 /**
  * Database Queries for Business Logic (Workflows)
- * 
+ *
  * This module contains all database queries related to workflows and analysis steps.
  */
-
-import { desc, eq, and, or, isNull, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 
 import db from "~/core/db/drizzle-client.server";
-import { workAnalysisSteps, workWorkflows } from "./schema";
-import { workTeamMembers, workWorkflowShares } from "../team-management/team-schema";
+
 import { workWorkflowMembers } from "../team-management/schema";
+import {
+  workTeamMembers,
+  workWorkflowShares,
+} from "../team-management/team-schema";
+import { workAnalysisSteps, workWorkflows } from "./schema";
 
 /**
  * Get all workflows for the current user with their steps
@@ -44,7 +47,7 @@ export async function getUserWorkflows(userId: string) {
     return ownedWorkflows;
   }
 
-  const teamIds = userTeams.map(t => t.team_id);
+  const teamIds = userTeams.map((t) => t.team_id);
 
   // 3. 팀 워크플로우 조회 (팀 전체 공유)
   const teamWorkflows = await db.query.workWorkflows.findMany({
@@ -57,19 +60,18 @@ export async function getUserWorkflows(userId: string) {
   });
 
   // 4. 모든 워크플로우 합치고 중복 제거
-  const allWorkflows = [
-    ...ownedWorkflows,
-    ...teamWorkflows,
-  ];
+  const allWorkflows = [...ownedWorkflows, ...teamWorkflows];
 
   // workflow_id로 중복 제거
-  const uniqueWorkflows = allWorkflows.filter((workflow, index, self) =>
-    index === self.findIndex((w) => w.workflow_id === workflow.workflow_id)
+  const uniqueWorkflows = allWorkflows.filter(
+    (workflow, index, self) =>
+      index === self.findIndex((w) => w.workflow_id === workflow.workflow_id),
   );
 
   // 생성일 순으로 정렬
-  return uniqueWorkflows.sort((a, b) => 
-    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  return uniqueWorkflows.sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   );
 }
 
@@ -116,9 +118,7 @@ export async function getWorkflowWithSteps(workflowId: number, userId: string) {
       const [shareRecord] = await db
         .select()
         .from(workWorkflowShares)
-        .where(
-          eq(workWorkflowShares.workflow_id, workflowId),
-        )
+        .where(eq(workWorkflowShares.workflow_id, workflowId))
         .limit(1);
 
       // 공유 레코드가 없으면 팀 전체 공유
@@ -178,4 +178,46 @@ export async function updateStepNotes(
     .update(workAnalysisSteps)
     .set({ notes })
     .where(eq(workAnalysisSteps.step_id, stepId));
+}
+
+/**
+ * Update a step's action and description
+ */
+export async function updateStepDetails(
+  stepId: number,
+  action: string,
+  description: string,
+): Promise<void> {
+  await db
+    .update(workAnalysisSteps)
+    .set({ action, description })
+    .where(eq(workAnalysisSteps.step_id, stepId));
+}
+
+/**
+ * Delete a step
+ */
+export async function deleteStep(stepId: number): Promise<void> {
+  await db
+    .delete(workAnalysisSteps)
+    .where(eq(workAnalysisSteps.step_id, stepId));
+}
+
+/**
+ * Add a new step to a workflow
+ */
+export async function addStep(
+  workflowId: number,
+  sequenceNo: number,
+  action: string,
+  description: string,
+): Promise<void> {
+  await db.insert(workAnalysisSteps).values({
+    workflow_id: workflowId,
+    sequence_no: sequenceNo,
+    type: "click", // Default type
+    action,
+    description,
+    confidence: 0,
+  });
 }

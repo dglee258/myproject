@@ -28,6 +28,7 @@ import {
 } from "~/core/components/ui/card";
 import { Input } from "~/core/components/ui/input";
 import { Label } from "~/core/components/ui/label";
+import resendClient from "~/core/lib/resend-client.server";
 import makeServerClient from "~/core/lib/supa-client.server";
 
 /**
@@ -84,15 +85,13 @@ export async function action({ request }: Route.ActionArgs) {
   // Create Supabase client
   const [client] = makeServerClient(request);
 
-  // Request password reset email from Supabase
-  const { error } = await client.auth.resetPasswordForEmail(result.data.email);
+  // Request password reset email from Supabase (this will use our custom SMTP)
+  const { error } = await client.auth.resetPasswordForEmail(result.data.email, {
+    redirectTo: `${process.env.SITE_URL}/auth/reset-password`,
+  });
 
-  // Return error if request fails
-  if (error) {
-    return data({ error: error.message }, { status: 400 });
-  }
-
-  // Return success response
+  // Always return success to prevent user enumeration attacks
+  // Even if there's an error, we don't want to reveal if the email exists or not
   return { success: true };
 }
 
@@ -157,7 +156,9 @@ export default function ForgotPassword({ actionData }: Route.ComponentProps) {
             {actionData && "error" in actionData && actionData.error ? (
               <FormErrors errors={[actionData.error]} />
             ) : null}
-            {actionData && "success" in actionData && actionData.success ? (
+            {actionData &&
+            "success" in actionData &&
+            actionData.success === true ? (
               <FormSuccess message="Check your email for a reset link, you can close this tab." />
             ) : null}
           </Form>

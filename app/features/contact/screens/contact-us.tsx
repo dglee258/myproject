@@ -214,8 +214,14 @@ export async function action({ request }: Route.ActionArgs) {
 
   // Send email to admin with contact information
   const { error } = await resendClient.emails.send({
-    from: "Supaplate <hello@supaplate.com>",
-    to: [process.env.ADMIN_EMAIL!],
+    from:
+      process.env.NODE_ENV === "development"
+        ? "Test <test@resend.dev>"
+        : "Supaplate <hello@supaplate.com>",
+    to:
+      process.env.NODE_ENV === "development"
+        ? ["test@resend.dev"]
+        : [process.env.ADMIN_EMAIL!],
     subject: "New contact from Supaplate",
     html: `
       <meta charset="utf-8">
