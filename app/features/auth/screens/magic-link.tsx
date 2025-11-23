@@ -3,7 +3,7 @@
  *
  * This component handles passwordless authentication via magic links.
  * Users enter their email and receive a link that automatically logs them in.
- * 
+ *
  * The component includes:
  * - Email input field with validation
  * - Form submission handling
@@ -94,6 +94,17 @@ export async function action({ request }: Route.ActionArgs) {
     },
   });
 
+  // Handle rate limiting error
+  if (error?.status === 429) {
+    return data(
+      {
+        error:
+          "요청이 너무 많습니다. 잠시 후 다시 시도해주세요. (약 1분 후 자동 해제됩니다)",
+      },
+      { status: 429 },
+    );
+  }
+
   // Handle specific errors
   if (error) {
     // Handle case where user doesn't exist
@@ -128,7 +139,7 @@ export async function action({ request }: Route.ActionArgs) {
 export default function MagicLink({ actionData }: Route.ComponentProps) {
   // Reference to the form element for resetting after successful submission
   const formRef = useRef<HTMLFormElement>(null);
-  
+
   // Reset the form when the magic link is successfully sent
   useEffect(() => {
     if (actionData && "success" in actionData && actionData.success) {

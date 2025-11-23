@@ -43,7 +43,10 @@ export default [
     ...prefix("/teams", [
       route("/", "routes/api/teams/index.ts"),
       route("/:teamId/members", "routes/api/teams/$teamId.members.ts"),
-      route("/:teamId/members/:memberId", "routes/api/teams/$teamId.members.$memberId.ts"),
+      route(
+        "/:teamId/members/:memberId",
+        "routes/api/teams/$teamId.members.$memberId.ts",
+      ),
       route("/:teamId/workflows", "routes/api/teams/$teamId.workflows.ts"),
       route(
         "/:teamId/workflows/:workflowId",
@@ -53,9 +56,15 @@ export default [
         "/:teamId/workflows/:workflowId/shares",
         "routes/api/teams/$teamId.workflows.$workflowId.shares.ts",
       ),
-      route("/:teamId/migrate-workflows", "routes/api/teams/$teamId.migrate-workflows.ts"),
+      route(
+        "/:teamId/migrate-workflows",
+        "routes/api/teams/$teamId.migrate-workflows.ts",
+      ),
       route("/invites/:token", "routes/api/teams/invites.$token.ts"),
-      route("/invites/:token/accept", "routes/api/teams/invites.$token.accept.ts"),
+      route(
+        "/invites/:token/accept",
+        "routes/api/teams/invites.$token.accept.ts",
+      ),
     ]),
     ...prefix("/work", [
       route("/upload", "routes/api/work/upload.ts"),
@@ -85,31 +94,49 @@ export default [
       ),
       route("/share/create", "routes/api/work/share.create.ts"),
       route("/share/claim", "routes/api/work/share.claim.ts"),
-      route("/share/workflows/:token", "routes/api/work/share.workflows.$token.ts"),
+      route(
+        "/share/workflows/:token",
+        "routes/api/work/share.workflows.$token.ts",
+      ),
     ]),
   ]),
 
   layout("features/work/layouts/work.layout.tsx", [
     ...prefix("/work", [
       index("features/work/screens/index.tsx"),
-      route("/business-logic", "features/work/business-logic/screens/business-logic.tsx"),
+      route(
+        "/business-logic",
+        "features/work/business-logic/screens/business-logic.tsx",
+      ),
       route("/upload", "features/work/upload/screens/upload.tsx"),
-      route("/team-management", "features/work/team-management/screens/team-management.tsx"),
-      route("/invite/:token", "features/work/team-management/screens/team-invite.tsx"),
+      route(
+        "/team-management",
+        "features/work/team-management/screens/team-management.tsx",
+      ),
+      route(
+        "/invite/:token",
+        "features/work/team-management/screens/team-invite.tsx",
+      ),
     ]),
+  ]),
+
+  // Account routes with custom layout (back button only, no navigation)
+  layout("core/layouts/account.layout.tsx", { id: "account" }, [
+    route("/account", "features/users/screens/account.tsx"),
+    route("/account/edit", "features/users/screens/account.edit.tsx"),
   ]),
 
   layout("core/layouts/navigation.layout.tsx", [
     route("/auth/confirm", "features/auth/screens/confirm.tsx"),
     index("features/home/screens/home.tsx"),
     route("/error", "core/screens/error.tsx"),
-    
+
     // 공개 페이지 (로그인 불필요)
     route("/service", "features/service/screens/service.tsx"),
     route("/pricing", "features/pricing/screens/pricing.tsx"),
     route("/demo", "features/demo/screens/demo-work.tsx"),
-  route("/share/:token", "features/work/share/screens/share-view.tsx"),
-    
+    route("/share/:token", "features/work/share/screens/share-view.tsx"),
+
     layout("core/layouts/public.layout.tsx", [
       // Routes that should only be visible to unauthenticated users.
       route("/login", "features/auth/screens/login.tsx"),
@@ -144,11 +171,11 @@ export default [
       ]),
       // Routes that should only be visible to authenticated users.
       route("/logout", "features/auth/screens/logout.tsx"),
-      // Account / Profile pages
-      route("/account", "features/users/screens/account.tsx"),
-      route("/account/edit", "features/users/screens/account.edit.tsx"),
       // Super admin dashboard (requires is_super_admin flag in profiles)
-      route("/admin/super-dashboard", "features/admin/screens/super-dashboard.tsx"),
+      route(
+        "/admin/super-dashboard",
+        "features/admin/screens/super-dashboard.tsx",
+      ),
     ]),
     route("/contact", "features/contact/screens/contact-us.tsx"),
     ...prefix("/payments", [
@@ -159,10 +186,6 @@ export default [
       ]),
     ]),
   ]),
-
-
-
-
 
   ...prefix("/legal", [route("/:slug", "features/legal/screens/policy.tsx")]),
 ] satisfies RouteConfig;

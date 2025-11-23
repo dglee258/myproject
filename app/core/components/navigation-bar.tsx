@@ -90,9 +90,10 @@ function UserMenu({
         {/* Dashboard link */}
         <DropdownMenuItem asChild>
           <SheetClose asChild>
-            <Link to="/dashboard" viewTransition>
-              <HomeIcon className="size-4" />
-              Dashboard
+            <Link to="/work/business-logic" viewTransition>
+              <Button variant="ghost" size="sm">
+                Dashboard
+              </Button>
             </Link>
           </SheetClose>
         </DropdownMenuItem>
@@ -315,9 +316,9 @@ export function NavigationBar({
             <SheetClose asChild>
               <Link to="/demo">체험하기</Link>
             </SheetClose>
-            <SheetClose asChild>
+            {/* <SheetClose asChild>
               <Link to="/contact">문의하기</Link>
-            </SheetClose>
+            </SheetClose> */}
           </SheetHeader>
           {loading ? (
             <div className="flex items-center">

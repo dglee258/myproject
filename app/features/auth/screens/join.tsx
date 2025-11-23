@@ -70,6 +70,7 @@ const joinSchema = z
     confirmPassword: z
       .string()
       .min(8, { message: "Password must be at least 8 characters long" }),
+    avatarUrl: z.string().optional(),
     marketing: z.coerce.boolean().default(false),
     terms: z.coerce.boolean(),
   })
@@ -133,14 +134,22 @@ export async function action({ request }: Route.ActionArgs) {
       // Store additional user metadata in Supabase auth
       data: {
         name: validData.name,
-        display_name: validData.name,
-        marketing_consent: validData.marketing,
+        avatar_url: validData.avatarUrl,
       },
     },
   });
 
-  // Return error if user creation fails
+  // Handle rate limiting error
   if (signInError) {
+    if (signInError.status === 429) {
+      return data(
+        {
+          error:
+            "회원가입 시도가 너무 많습니다. 잠시 후 다시 시도해주세요. (약 1분 후 자동 해제됩니다)",
+        },
+        { status: 429 },
+      );
+    }
     return data({ error: signInError.message }, { status: 400 });
   }
 

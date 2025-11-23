@@ -2,10 +2,10 @@ import {
   BriefcaseIcon,
   ChevronsUpDownIcon,
   LogOutIcon,
+  ShieldCheckIcon,
   UploadIcon,
   UserIcon,
   UsersIcon,
-  ShieldCheckIcon,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 
@@ -89,20 +89,20 @@ export default function WorkSidebar(
         <div className="flex items-center gap-2 px-2 py-4">
           <SidebarTrigger className="-ml-1 hidden lg:flex" />
           <h2 className="text-lg font-semibold group-data-[collapsible=icon]:hidden">
-            업무 관리
+            워크스페이스
           </h2>
         </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>업무 메뉴</SidebarGroupLabel>
+          {/* <SidebarGroupLabel>업무 메뉴</SidebarGroupLabel> */}
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     onClick={() => {
-                      console.log('Navigating to:', item.url);
+                      console.log("Navigating to:", item.url);
                       navigate(item.url);
                     }}
                   >
@@ -125,10 +125,7 @@ export default function WorkSidebar(
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
                   <Avatar className="h-8 w-8 rounded-lg">
-                    <AvatarImage
-                      src={user.avatarUrl}
-                      alt={user.name}
-                    />
+                    <AvatarImage src={user.avatarUrl} alt={user.name} />
                     <AvatarFallback className="rounded-lg">
                       {user.name.slice(0, 2)}
                     </AvatarFallback>
@@ -149,16 +146,15 @@ export default function WorkSidebar(
                 <DropdownMenuLabel className="p-0 font-normal">
                   <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                     <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarImage
-                        src={user.avatarUrl}
-                        alt={user.name}
-                      />
+                      <AvatarImage src={user.avatarUrl} alt={user.name} />
                       <AvatarFallback className="rounded-lg">
                         {user.name.slice(0, 2)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{user.name}</span>
+                      <span className="truncate font-semibold">
+                        {user.name}
+                      </span>
                       <span className="truncate text-xs">{user.email}</span>
                     </div>
                   </div>

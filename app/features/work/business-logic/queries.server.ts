@@ -204,7 +204,8 @@ export async function deleteStep(stepId: number): Promise<void> {
 }
 
 /**
- * Add a new step to a workflow
+ * Add a new step to a workflow at a specific position
+ * Shifts all subsequent steps down by 1
  */
 export async function addStep(
   workflowId: number,
@@ -212,6 +213,18 @@ export async function addStep(
   action: string,
   description: string,
 ): Promise<void> {
+  // First, shift all existing steps at or after this position down by 1
+  await db
+    .update(workAnalysisSteps)
+    .set({ sequence_no: db.raw("sequence_no + 1") })
+    .where(
+      and(
+        eq(workAnalysisSteps.workflow_id, workflowId),
+        db.raw("sequence_no >= ?", [sequenceNo]),
+      ),
+    );
+
+  // Then insert the new step at the specified position
   await db.insert(workAnalysisSteps).values({
     workflow_id: workflowId,
     sequence_no: sequenceNo,
@@ -220,4 +233,40 @@ export async function addStep(
     description,
     confidence: 0,
   });
+}
+
+/**
+ * Reorder steps by updating their sequence numbers
+ */
+export async function reorderSteps(
+  workflowId: number,
+  stepIds: number[],
+): Promise<void> {
+  // Update each step with its new sequence number
+  await db.transaction(async (tx) => {
+    for (let i = 0; i < stepIds.length; i++) {
+      await tx
+        .update(workAnalysisSteps)
+        .set({ sequence_no: i + 1 })
+        .where(
+          and(
+            eq(workAnalysisSteps.step_id, stepIds[i]),
+            eq(workAnalysisSteps.workflow_id, workflowId),
+          ),
+        );
+    }
+  });
+}
+
+/**
+ * Update step type
+ */
+export async function updateStepType(
+  stepId: number,
+  type: string,
+): Promise<void> {
+  await db
+    .update(workAnalysisSteps)
+    .set({ type })
+    .where(eq(workAnalysisSteps.step_id, stepId));
 }

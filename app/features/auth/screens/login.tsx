@@ -72,7 +72,7 @@ const loginSchema = z.object({
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const message = url.searchParams.get("message");
-  
+
   return { message };
 }
 
@@ -109,11 +109,21 @@ export async function action({ request }: Route.ActionArgs) {
   const { error: signInError } = await client.auth.signInWithPassword({
     ...validData,
   });
-  
+
   if (signInError) {
+    // Handle rate limiting error
+    if (signInError.status === 429) {
+      return data(
+        {
+          error:
+            "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요. (약 1분 후 자동 해제됩니다)",
+        },
+        { status: 429 },
+      );
+    }
     return data({ error: signInError.message }, { status: 400 });
   }
-  
+
   // 로그인 성공 후 /work로 리다이렉트
   return redirect("/work", { headers });
 }
@@ -132,7 +142,10 @@ export async function action({ request }: Route.ActionArgs) {
  *
  * @param actionData - Data returned from the form action, including any errors
  */
-export default function Login({ actionData, loaderData }: Route.ComponentProps) {
+export default function Login({
+  actionData,
+  loaderData,
+}: Route.ComponentProps) {
   // Reference to the form element for accessing form data
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -162,9 +175,7 @@ export default function Login({ actionData, loaderData }: Route.ComponentProps) 
     <div className="flex flex-col items-center justify-center gap-4">
       <Card className="w-full max-w-md">
         <CardHeader className="flex flex-col items-center">
-          <CardTitle className="text-2xl font-semibold">
-            로그인
-          </CardTitle>
+          <CardTitle className="text-2xl font-semibold">로그인</CardTitle>
           <CardDescription className="text-base">
             계정 정보를 입력해주세요
           </CardDescription>
@@ -272,7 +283,7 @@ export default function Login({ actionData, loaderData }: Route.ComponentProps) 
       </Card>
       <div className="flex flex-col items-center justify-center gap-3 text-sm">
         <p className="text-muted-foreground">
-          계정이 없으신가요? {" "}
+          계정이 없으신가요?{" "}
           <Link
             to="/join"
             viewTransition
@@ -288,7 +299,7 @@ export default function Login({ actionData, loaderData }: Route.ComponentProps) 
             <Link
               to="/demo"
               viewTransition
-              className="text-blue-600 hover:text-blue-700 font-medium underline transition-colors dark:text-blue-400 dark:hover:text-blue-300"
+              className="font-medium text-blue-600 underline transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
             >
               로그인 없이 데모 체험하기
             </Link>

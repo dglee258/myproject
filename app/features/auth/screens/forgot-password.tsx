@@ -90,6 +90,17 @@ export async function action({ request }: Route.ActionArgs) {
     redirectTo: `${process.env.SITE_URL}/auth/reset-password`,
   });
 
+  // Handle rate limiting error
+  if (error?.status === 429) {
+    return data(
+      {
+        error:
+          "요청이 너무 많습니다. 잠시 후 다시 시도해주세요. (잠시 기다려주시면 자동으로 해제됩니다)",
+      },
+      { status: 429 },
+    );
+  }
+
   // Always return success to prevent user enumeration attacks
   // Even if there's an error, we don't want to reveal if the email exists or not
   return { success: true };
