@@ -30,6 +30,7 @@ interface VideoFile {
   status: UploadStatus;
   progress: number;
   error?: string;
+  duration_seconds?: number;
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -96,12 +97,32 @@ export default function Upload() {
     }
 
     const preview = URL.createObjectURL(file);
-    setVideoFile({
-      file,
-      preview,
-      status: "idle",
-      progress: 0,
-    });
+
+    // Extract video duration
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.src = preview;
+
+    video.onloadedmetadata = () => {
+      const duration = Math.round(video.duration);
+      setVideoFile({
+        file,
+        preview,
+        status: "idle",
+        progress: 0,
+        duration_seconds: duration,
+      });
+    };
+
+    video.onerror = () => {
+      // If duration extraction fails, proceed without it
+      setVideoFile({
+        file,
+        preview,
+        status: "idle",
+        progress: 0,
+      });
+    };
   };
 
   const handleUpload = async () => {
@@ -135,6 +156,7 @@ export default function Upload() {
           mime_type: videoFile.file.type,
           file_size: videoFile.file.size,
           storage_path: path,
+          duration_seconds: videoFile.duration_seconds || null,
         }),
       });
       if (!createRes.ok) {

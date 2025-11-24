@@ -120,6 +120,11 @@ export default [
     ]),
   ]),
 
+  // Admin routes with admin layout
+  layout("features/admin/layouts/admin.layout.tsx", [
+    ...prefix("/admin", [index("features/admin/screens/super-dashboard.tsx")]),
+  ]),
+
   // Account routes with custom layout (back button only, no navigation)
   layout("core/layouts/account.layout.tsx", { id: "account" }, [
     route("/account", "features/users/screens/account.tsx"),
@@ -171,11 +176,6 @@ export default [
       ]),
       // Routes that should only be visible to authenticated users.
       route("/logout", "features/auth/screens/logout.tsx"),
-      // Super admin dashboard (requires is_super_admin flag in profiles)
-      route(
-        "/admin/super-dashboard",
-        "features/admin/screens/super-dashboard.tsx",
-      ),
     ]),
     route("/contact", "features/contact/screens/contact-us.tsx"),
     ...prefix("/payments", [

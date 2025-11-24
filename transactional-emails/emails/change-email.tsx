@@ -7,55 +7,106 @@ import {
   Html,
   Preview,
   Section,
-  Tailwind,
   Text,
 } from "@react-email/components";
 
-export default function ConfirmEmailChange() {
+interface ChangeEmailProps {
+  userName?: string;
+  newEmail?: string;
+  confirmationUrl?: string;
+}
+
+export default function ChangeEmail({
+  userName = "사용자",
+  newEmail,
+  confirmationUrl,
+}: ChangeEmailProps) {
   return (
-    <Tailwind>
-      <Html>
-        <Head />
-        <Body className="bg-white font-sans">
-          <Preview>이메일 변경 확인</Preview>
-          <Container className="mx-auto max-w-[560px] py-5 pb-12">
-            <Heading className="pt-4 text-center text-2xl leading-tight font-normal tracking-[-0.5px] text-black">
-              이메일 변경 확인
-            </Heading>
-            <Section>
-              <Text className="mb-4 break-after-avoid-page text-[15px] leading-relaxed">
-                아래 버튼을 클릭하여 이메일을 {`{{ .Email }}`}에서{" "}
-                {`{{ .NewEmail }}`}로 변경해주세요:
-              </Text>
-              <Button
-                className="block rounded-xl bg-black px-6 py-3 text-center text-[15px] font-semibold text-white no-underline"
-                href={`{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email_change&next=/auth/email-verified`}
-              >
-                이메일 변경 확인
+    <Html>
+      <Head />
+      <Preview>싱크로 이메일 변경 확인</Preview>
+      <Body style={main}>
+        <Container style={container}>
+          <Section style={header}>
+            <Heading style={heading}>이메일 변경 확인</Heading>
+          </Section>
+
+          <Section style={content}>
+            <Text style={text}>
+              {userName}님, 이메일 주소를 변경하시려고 합니다.
+            </Text>
+            <Text style={text}>
+              새 이메일 주소: <strong>{newEmail}</strong>
+            </Text>
+            <Text style={text}>
+              아래 버튼을 클릭하여 이메일 변경을 확인해주세요.
+            </Text>
+
+            {confirmationUrl && (
+              <Button style={button} href={confirmationUrl}>
+                이메일 변경 확인하기
               </Button>
-            </Section>
-            <Section>
-              <Text className="mb-4 text-[15px] leading-relaxed text-black">
-                위 버튼이 작동하지 않는 경우, 아래 URL을 복사하여 브라우저에
-                붙여넣으세요:
-              </Text>
-              <Text className="mb-4 text-[15px] leading-relaxed text-blue-500">
-                {`{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email_change&next=/auth/email-verified`}
-              </Text>
-              <Text className="mb-4 text-[15px] leading-relaxed text-black">
-                Synchro에서 계정을 생성하지 않으셨다면 이 이메일을 무시하셔도
-                됩니다.
-              </Text>
-              <Text className="mb-4 text-[15px] leading-relaxed text-black">
-                감사합니다,
-              </Text>
-              <Text className="mb-4 text-[15px] leading-relaxed text-black">
-                Synchro 팀 드림
-              </Text>
-            </Section>
-          </Container>
-        </Body>
-      </Html>
-    </Tailwind>
+            )}
+
+            <Text style={smallText}>
+              이 링크는 24시간 동안 유효합니다. 만약 요청하지 않으셨다면 이
+              이메일을 무시해주세요.
+            </Text>
+          </Section>
+        </Container>
+      </Body>
+    </Html>
   );
 }
+
+const main = {
+  backgroundColor: "#f8fafc",
+  fontFamily:
+    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+};
+
+const container = {
+  maxWidth: "600px",
+  margin: "0 auto",
+  padding: "20px",
+  backgroundColor: "#ffffff",
+  borderRadius: "12px",
+  boxShadow: "0 4px 6px rgba(0, 0, 0, 0.05)",
+};
+
+const header = {
+  textAlign: "center" as const,
+  padding: "40px 0 20px",
+};
+
+const heading = {
+  fontSize: "24px",
+  fontWeight: "600",
+  color: "#1e293b",
+};
+
+const content = {
+  padding: "20px 0",
+};
+
+const text = {
+  fontSize: "16px",
+  color: "#64748b",
+  marginBottom: "16px",
+};
+
+const button = {
+  backgroundColor: "#3b82f6",
+  color: "#ffffff",
+  padding: "12px 24px",
+  borderRadius: "8px",
+  textDecoration: "none" as const,
+  fontWeight: "600",
+  display: "inline-block",
+};
+
+const smallText = {
+  fontSize: "14px",
+  color: "#94a3b8",
+  marginTop: "24px",
+};
