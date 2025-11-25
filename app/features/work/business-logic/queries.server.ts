@@ -267,6 +267,6 @@ export async function updateStepType(
 ): Promise<void> {
   await db
     .update(workAnalysisSteps)
-    .set({ type })
+    .set({ type: type as "input" | "click" | "wait" | "navigate" | "decision" })
     .where(eq(workAnalysisSteps.step_id, stepId));
 }
