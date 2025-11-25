@@ -44,7 +44,7 @@ import {
   Volume2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Link,
   data,
@@ -55,8 +55,12 @@ import {
 } from "react-router";
 import { toast } from "sonner";
 
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "~/core/components/ui/alert";
 import { Badge } from "~/core/components/ui/badge";
-import { BorderBeam } from "~/core/components/ui/border-beam";
 import { Button } from "~/core/components/ui/button";
 import {
   Card,
@@ -87,7 +91,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "~/core/components/ui/sheet";
-import { ShineBorder } from "~/core/components/ui/shine-border";
 import { Textarea } from "~/core/components/ui/textarea";
 import { useIsMobile } from "~/core/hooks/use-mobile";
 import makeServerClient from "~/core/lib/supa-client.server";
@@ -105,18 +108,38 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const [client] = makeServerClient(request);
-  const {
-    data: { user },
-  } = await client.auth.getUser();
+  try {
+    const [client] = makeServerClient(request);
+    const {
+      data: { user },
+    } = await client.auth.getUser();
 
-  if (!user) {
-    throw new Response("Unauthorized", { status: 401 });
+    if (!user) {
+      throw new Response("Unauthorized", { status: 401 });
+    }
+
+    const workflows = await getUserWorkflows(user.id);
+
+    return { workflows };
+  } catch (error: any) {
+    // Handle Supabase rate limit error specifically
+    if (error?.status === 429 || error?.code === "over_request_rate_limit") {
+      console.warn(
+        "Supabase rate limit reached, using cached data if available",
+      );
+      // Return empty workflows instead of redirecting to login
+      return { workflows: [], rateLimitWarning: true };
+    }
+
+    // For other auth errors, still redirect to login
+    if (error?.status === 401) {
+      throw new Response("Unauthorized", { status: 401 });
+    }
+
+    // For other errors, return empty data
+    console.error("Loader error:", error);
+    return { workflows: [], error: true };
   }
-
-  const workflows = await getUserWorkflows(user.id);
-
-  return { workflows };
 }
 
 // 메모 저장 및 스텝 편집 action
@@ -199,6 +222,26 @@ export async function action({ request }: Route.ActionArgs) {
       await reorderSteps(workflowId, stepIds);
 
       return data({ success: true, message: "단계 순서가 변경되었습니다" });
+    } else if (actionType === "addStep") {
+      const workflowId = parseInt(formData.get("workflowId") as string);
+      const sequenceNo = parseInt(formData.get("sequenceNo") as string);
+      const action = formData.get("action") as string;
+      const description = formData.get("description") as string;
+
+      if (isNaN(workflowId) || isNaN(sequenceNo)) {
+        return data({ error: "Invalid parameters" }, { status: 400 });
+      }
+
+      // DB에 새 단계 추가
+      const { addStep } = await import("../queries.server");
+      await addStep(
+        workflowId,
+        sequenceNo,
+        action || "새 단계",
+        description || "",
+      );
+
+      return data({ success: true, message: "새 단계가 추가되었습니다" });
     }
 
     return data({ error: "Invalid action type" }, { status: 400 });
@@ -230,8 +273,8 @@ interface LogicStep {
   notes?: string; // 추가 설명
 }
 
-// Sortable step component for drag and drop
-function SortableStep({
+// Demo style step component with modern UI and sortable support
+function DemoStyleStep({
   step,
   index,
   isEditMode,
@@ -264,6 +307,17 @@ function SortableStep({
   ) => { action: string; description: string; type?: string } | undefined;
   handleTypeChange: (stepId: number, newType: string) => void;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isEditingType, setIsEditingType] = useState(false);
+  const [editedType, setEditedType] = useState(step.type);
+  const [localAction, setLocalAction] = useState(currentAction);
+
+  // Sync local action when currentAction changes (step.id changes)
+  useEffect(() => {
+    setLocalAction(currentAction);
+  }, [currentAction, step.id]);
+
+  // Sortable hooks for drag and drop
   const {
     attributes,
     listeners,
@@ -279,8 +333,22 @@ function SortableStep({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const [isEditingType, setIsEditingType] = useState(false);
-  const [editedType, setEditedType] = useState(step.type);
+  const getStepIcon = (type: LogicStep["type"]) => {
+    switch (type) {
+      case "click":
+        return "🖱️";
+      case "input":
+        return "⌨️";
+      case "navigate":
+        return "🧭";
+      case "wait":
+        return "⏱️";
+      case "decision":
+        return "🔀";
+      default:
+        return "📝";
+    }
+  };
 
   const actionTypes = [
     {
@@ -316,8 +384,6 @@ function SortableStep({
 
   const handleLocalTypeChange = (newType: string) => {
     setEditedType(newType as LogicStep["type"]);
-
-    // Call parent's handleTypeChange to store in editedSteps Map
     handleTypeChange(step.id, newType);
     setIsEditingType(false);
   };
@@ -327,199 +393,217 @@ function SortableStep({
     getStepColor(step.type);
 
   return (
-    <Card
+    <div
+      className="relative"
       ref={setNodeRef}
-      style={style}
-      className={`overflow-hidden transition-all duration-300 ${
-        isEditMode
-          ? "shadow-blue-20/20 cursor-move border-blue-200 bg-white hover:border-blue-300 hover:bg-blue-50 hover:shadow-lg dark:border-blue-600 dark:bg-blue-50/50 dark:hover:bg-blue-100"
-          : ""
-      }`}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
     >
-      <CardContent className="p-0">
-        {/* Step Header */}
-        <div
-          className={`flex items-center gap-4 border-b p-4 ${
-            isEditMode ? "bg-blue-50/50" : "bg-muted/30"
-          }`}
-        >
-          {isEditMode && (
-            <div
-              {...attributes}
-              {...listeners}
-              className="bg-muted hover:bg-muted/80 flex h-8 w-8 flex-shrink-0 cursor-move items-center justify-center rounded-lg"
-            >
-              <GripVertical className="text-muted-foreground h-4 w-4" />
-            </div>
-          )}
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#4169E1] text-white">
-            <span className="text-sm font-medium">{index + 1}</span>
-          </div>
-          <div className="min-w-0 flex-1">
-            {isEditMode ? (
-              <Input
-                value={currentAction}
-                onChange={(e) => handleStepTitleChange(step.id, e.target.value)}
-                className="border-blue-300 font-medium focus:border-blue-500"
-              />
-            ) : (
-              <h3
-                className={`font-semibold ${
-                  isEditMode
-                    ? "border-b-2 border-dashed border-blue-300 pb-1 text-blue-900 dark:text-blue-100"
-                    : ""
-                }`}
-              >
-                {currentAction}
-                {isEditMode && (
-                  <Edit className="ml-2 inline-block size-3 text-blue-500" />
-                )}
-              </h3>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {isEditMode ? (
-              <DropdownMenu
-                open={isEditingType}
-                onOpenChange={setIsEditingType}
-              >
-                <DropdownMenuTrigger asChild>
-                  <Badge
-                    variant="secondary"
-                    className={`cursor-pointer hover:opacity-80 ${currentTypeColor}`}
-                  >
-                    <Edit className="mr-1 size-3" />
-                    {actionTypes.find((t) => t.value === editedType)?.label}
-                  </Badge>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  {actionTypes.map((type) => (
-                    <DropdownMenuItem
-                      key={type.value}
-                      onClick={() => handleLocalTypeChange(type.value)}
-                      className={type.color}
-                    >
-                      {type.label}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <Badge variant="secondary" className={getStepColor(step.type)}>
-                {step.type === "click" && "클릭"}
-                {step.type === "input" && "입력"}
-                {step.type === "navigate" && "이동"}
-                {step.type === "wait" && "대기"}
-                {step.type === "decision" && "판단"}
-              </Badge>
-            )}
-            {step.timestamp && step.timestamp !== "0:00" && (
-              <span className="text-muted-foreground text-sm">
-                {step.timestamp}
-              </span>
-            )}
+      <div
+        {...attributes}
+        {...(isEditMode ? listeners : {})}
+        onMouseEnter={() => !isEditMode && setIsExpanded(true)}
+        onMouseLeave={() => !isEditMode && setIsExpanded(false)}
+        onClick={(e) => {
+          if (!isEditMode) {
+            e.stopPropagation();
+            setIsExpanded(true);
+          }
+        }}
+        className={`group relative cursor-pointer rounded-lg border transition-all duration-300 ${
+          isEditMode
+            ? "shadow-blue-20/20 cursor-move border-blue-200 bg-white hover:border-blue-300 hover:bg-blue-50 hover:shadow-lg dark:border-blue-600 dark:bg-blue-50/50 dark:hover:bg-blue-100"
+            : isExpanded
+              ? "border-primary bg-primary/5 shadow-primary/20 shadow-lg"
+              : "border-border bg-card hover:border-primary/50 hover:shadow-md"
+        }`}
+      >
+        <div className="p-4 transition-transform duration-300 group-hover:scale-[1.01]">
+          <div className="flex items-start gap-4">
             {isEditMode && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleDeleteStep(step.id)}
-              >
-                <Trash2 className="text-destructive h-4 w-4" />
-              </Button>
+              <div className="bg-primary text-primary-foreground flex size-12 shrink-0 items-center justify-center rounded-full text-lg font-bold">
+                {index + 1}
+              </div>
             )}
             {!isEditMode && (
-              <ChevronRight className="text-muted-foreground h-4 w-4" />
+              <div className="bg-primary text-primary-foreground flex size-12 shrink-0 items-center justify-center rounded-full text-lg font-bold">
+                {index + 1}
+              </div>
             )}
+
+            <div className="flex-1">
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{getStepIcon(step.type)}</span>
+                  {isEditMode ? (
+                    <Input
+                      value={localAction}
+                      onChange={(e) => {
+                        setLocalAction(e.target.value);
+                        handleStepTitleChange(step.id, e.target.value);
+                      }}
+                      className="border-blue-300 font-medium focus:border-blue-500"
+                    />
+                  ) : (
+                    <h4 className="font-semibold">{currentAction}</h4>
+                  )}
+                </div>
+                {isEditMode && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteStep(step.id);
+                    }}
+                  >
+                    <Trash2 className="text-destructive h-4 w-4" />
+                  </Button>
+                )}
+                {!isEditMode && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsExpanded(!isExpanded);
+                    }}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="size-5" />
+                    ) : (
+                      <ChevronRight className="size-5" />
+                    )}
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                {isEditMode ? (
+                  <DropdownMenu
+                    open={isEditingType}
+                    onOpenChange={setIsEditingType}
+                  >
+                    <DropdownMenuTrigger asChild>
+                      <Badge
+                        variant="outline"
+                        className={`cursor-pointer hover:opacity-80 ${currentTypeColor}`}
+                      >
+                        <Edit className="mr-1 size-3" />
+                        {actionTypes.find((t) => t.value === editedType)?.label}
+                      </Badge>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      {actionTypes.map((type) => (
+                        <DropdownMenuItem
+                          key={type.value}
+                          onClick={() => handleLocalTypeChange(type.value)}
+                          className={type.color}
+                        >
+                          {type.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Badge variant="outline" className={getStepColor(step.type)}>
+                    {step.type === "click" && "클릭"}
+                    {step.type === "input" && "입력"}
+                    {step.type === "navigate" && "이동"}
+                    {step.type === "wait" && "대기"}
+                    {step.type === "decision" && "판단"}
+                  </Badge>
+                )}
+                <span className="text-muted-foreground text-sm">
+                  {step.timestamp}
+                </span>
+              </div>
+
+              {(isExpanded || isEditMode) && (
+                <div className="mt-3 space-y-3">
+                  {isEditMode ? (
+                    <div>
+                      <Textarea
+                        value={currentDescription}
+                        onChange={(e) =>
+                          handleStepDescriptionChange(step.id, e.target.value)
+                        }
+                        placeholder="이 단계에 대한 설명을 입력하세요"
+                        rows={3}
+                        className="resize-none border-blue-300 focus:border-blue-500"
+                      />
+                    </div>
+                  ) : (
+                    <div className="bg-muted/50 rounded-lg p-3">
+                      <p className="text-muted-foreground text-sm">
+                        {currentDescription}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Screenshot */}
+                  {step.screenshot_url && (
+                    <div className="bg-muted relative aspect-video overflow-hidden rounded-lg">
+                      <img
+                        src={step.screenshot_url}
+                        alt={currentAction}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  )}
+
+                  {/* Notes Section */}
+                  {!isEditMode && (
+                    <>
+                      {step.notes ? (
+                        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950">
+                          <div className="mb-2 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Lightbulb className="size-4 text-blue-600 dark:text-blue-400" />
+                              <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                                추가 설명
+                              </span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditDialog(step);
+                              }}
+                            >
+                              <Edit className="size-3" />
+                            </Button>
+                          </div>
+                          <p className="text-sm text-blue-700 dark:text-blue-300">
+                            {step.notes}
+                          </p>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditDialog(step);
+                          }}
+                          className="w-full"
+                        >
+                          <Plus className="mr-2 size-4" />이 단계에 메모
+                          추가하기
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-
-        {/* Step Content */}
-        <div className="space-y-4 p-4">
-          {/* Screenshot */}
-          {step.screenshot_url && (
-            <div className="bg-muted relative aspect-video overflow-hidden rounded-lg">
-              <img
-                src={step.screenshot_url}
-                alt={currentAction}
-                className="h-full w-full object-cover"
-              />
-            </div>
-          )}
-
-          {/* Description */}
-          {isEditMode ? (
-            <div>
-              <label className="mb-2 block text-sm font-medium">설명</label>
-              <Textarea
-                value={currentDescription}
-                onChange={(e) =>
-                  handleStepDescriptionChange(step.id, e.target.value)
-                }
-                placeholder="이 단계에 대한 설명을 입력하세요"
-                rows={3}
-                className="resize-none border-blue-300 focus:border-blue-500"
-              />
-            </div>
-          ) : (
-            <div
-              className={`bg-muted/50 rounded-lg p-3 ${
-                isEditMode
-                  ? "border border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900"
-                  : ""
-              }`}
-            >
-              <p
-                className={`text-muted-foreground text-sm ${
-                  isEditMode ? "text-blue-800 dark:text-blue-200" : ""
-                }`}
-              >
-                {currentDescription}
-              </p>
-            </div>
-          )}
-
-          {/* Notes Section */}
-          {!isEditMode && (
-            <>
-              {step.notes ? (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Lightbulb className="size-4 text-blue-600 dark:text-blue-400" />
-                      <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                        추가 설명
-                      </span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEditDialog(step)}
-                    >
-                      <Edit className="size-3" />
-                    </Button>
-                  </div>
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    {step.notes}
-                  </p>
-                </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openEditDialog(step);
-                  }}
-                  className="w-full"
-                >
-                  <Plus className="mr-2 size-4" />이 단계에 메모 추가하기
-                </Button>
-              )}
-            </>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -538,7 +622,7 @@ function formatDate(date: Date | null | undefined): string {
 }
 
 export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
-  const { workflows: dbWorkflows } = loaderData;
+  const { workflows: dbWorkflows, rateLimitWarning } = loaderData;
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
   const navigate = useNavigate();
@@ -589,8 +673,6 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   const [selectedVideo, setSelectedVideo] = useState<VideoAnalysis | null>(
     mockVideos[0] || null,
   );
-  const [expandedSteps, setExpandedSteps] = useState<number[]>([]); // 버튼 클릭으로 고정된 단계
-  const [hoveredStep, setHoveredStep] = useState<number | null>(null); // hover 상태 단계
   const [editingStep, setEditingStep] = useState<LogicStep | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editNotes, setEditNotes] = useState("");
@@ -599,7 +681,10 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   const [editedSteps, setEditedSteps] = useState<
     Map<number, { action: string; description: string; type?: string }>
   >(new Map());
+  const [deletedStepIds, setDeletedStepIds] = useState<Set<number>>(new Set());
+  const [addedSteps, setAddedSteps] = useState<LogicStep[]>([]);
   const [workflowToDelete, setWorkflowToDelete] = useState<string | null>(null);
+  const originalVideoRef = useRef<VideoAnalysis | null>(null);
 
   // DnD sensors
   const sensors = useSensors(
@@ -617,20 +702,8 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   useEffect(() => {
     setIsEditMode(false);
     setEditedSteps(new Map());
+    originalVideoRef.current = null; // 원본 상태 ref 초기화
   }, [selectedVideo?.id]);
-
-  const toggleStep = (stepId: number) => {
-    setExpandedSteps((prev) =>
-      prev.includes(stepId)
-        ? prev.filter((id) => id !== stepId)
-        : [...prev, stepId],
-    );
-  };
-
-  // 단계가 열려있는지 확인 (hover 또는 고정)
-  const isStepOpen = (stepId: number) => {
-    return expandedSteps.includes(stepId) || hoveredStep === stepId;
-  };
 
   const openEditDialog = (step: LogicStep) => {
     setEditingStep(step);
@@ -662,10 +735,14 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
     toast.success("메모가 저장되었습니다");
   };
 
-  // fetcher 성공 시 데이터 리로드
+  // fetcher 성공 시 데이터 리로드 (rate limit 방지를 위해 디바운스 추가)
   useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data?.success) {
-      revalidator.revalidate();
+    if (fetcher.state === "idle" && fetcher.data) {
+      const timeoutId = setTimeout(() => {
+        revalidator.revalidate();
+      }, 1000); // 1초 디바운스
+
+      return () => clearTimeout(timeoutId);
     }
   }, [fetcher.state, fetcher.data, revalidator]);
 
@@ -684,6 +761,11 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
 
   const handleEditProcess = () => {
     if (!isEditMode) {
+      // Store original state for cancel functionality
+      originalVideoRef.current = selectedVideo
+        ? { ...selectedVideo, steps: [...selectedVideo.steps] }
+        : null;
+
       // Initialize edited steps with current values when entering edit mode
       const newEditedSteps = new Map<
         number,
@@ -696,8 +778,47 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
         });
       });
       setEditedSteps(newEditedSteps);
+      setDeletedStepIds(new Set());
+      setAddedSteps([]);
       toast.success("수정 모드가 활성화되었습니다");
     } else {
+      // Save all pending operations: reorders first, then deletes, adds, and edits
+      if (!selectedVideo) return;
+
+      // Process reordering if steps have been reordered
+      if (originalVideoRef.current) {
+        const originalOrder = originalVideoRef.current.steps.map((s) => s.id);
+        const currentOrder = selectedVideo.steps.map((s) => s.id);
+
+        if (JSON.stringify(originalOrder) !== JSON.stringify(currentOrder)) {
+          const formData = new FormData();
+          formData.append("actionType", "reorderSteps");
+          formData.append("workflowId", selectedVideo.id);
+          formData.append("stepIds", JSON.stringify(currentOrder));
+          fetcher.submit(formData, { method: "post" });
+        }
+      }
+
+      // Process deletions
+      deletedStepIds.forEach((stepId) => {
+        const formData = new FormData();
+        formData.append("actionType", "deleteStep");
+        formData.append("stepId", stepId.toString());
+        fetcher.submit(formData, { method: "post" });
+      });
+
+      // Process additions
+      addedSteps.forEach((step, index) => {
+        const sequenceNo = selectedVideo.steps.length + index + 1;
+        const formData = new FormData();
+        formData.append("actionType", "addStep");
+        formData.append("workflowId", selectedVideo.id);
+        formData.append("sequenceNo", sequenceNo.toString());
+        formData.append("action", step.action);
+        formData.append("description", step.description);
+        fetcher.submit(formData, { method: "post" });
+      });
+
       // Save all edited steps including type changes
       editedSteps.forEach((editedStep, stepId) => {
         const originalStep = selectedVideo?.steps.find((s) => s.id === stepId);
@@ -732,10 +853,29 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
           }
         }
       });
+
+      // Clear all pending operations
       setEditedSteps(new Map());
+      setDeletedStepIds(new Set());
+      setAddedSteps([]);
       toast.success("변경사항이 저장되었습니다");
     }
     setIsEditMode(!isEditMode);
+  };
+
+  const handleCancelEdit = () => {
+    // Clear all pending operations
+    setEditedSteps(new Map());
+    setDeletedStepIds(new Set());
+    setAddedSteps([]);
+
+    // Restore original video data from stored ref
+    if (originalVideoRef.current) {
+      setSelectedVideo(originalVideoRef.current);
+    }
+
+    setIsEditMode(false);
+    toast.success("수정이 취소되었습니다");
   };
 
   const handleStepTitleChange = (stepId: number, newTitle: string) => {
@@ -785,49 +925,54 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
       if (oldIndex !== -1 && newIndex !== -1) {
         const newSteps = arrayMove(selectedVideo.steps, oldIndex, newIndex);
 
-        // Update UI immediately
+        // Update UI immediately but don't save to backend yet
         setSelectedVideo({ ...selectedVideo, steps: newSteps });
 
-        // Submit reordering to backend
-        const formData = new FormData();
-        formData.append("actionType", "reorderSteps");
-        formData.append("workflowId", selectedVideo.id);
-        formData.append(
-          "stepIds",
-          JSON.stringify(newSteps.map((step) => step.id)),
-        );
-
-        fetcher.submit(formData, { method: "post" });
-        toast.success("단계 순서가 변경되었습니다");
+        toast.success("단계 순서가 변경되었습니다 (저장 필요)");
       }
     }
   };
 
   const handleAddStep = async (insertAfterIndex?: number) => {
-    if (!selectedVideo) return;
+    if (!selectedVideo || !isEditMode) return;
 
-    const sequenceNo =
+    // Create temporary step for optimistic UI update
+    const tempStep: LogicStep = {
+      id: -Date.now(), // Temporary negative ID
+      action: "새 단계",
+      description: "",
+      timestamp: "0:00",
+      confidence: 0,
+      type: "click" as const,
+    };
+
+    // Add to pending operations
+    setAddedSteps((prev) => [...prev, tempStep]);
+
+    // Update UI immediately
+    const newSteps =
       insertAfterIndex !== undefined
-        ? insertAfterIndex + 2
-        : selectedVideo.steps.length + 1;
-    const formData = new FormData();
-    formData.append("actionType", "addStep");
-    formData.append("workflowId", selectedVideo.id);
-    formData.append("sequenceNo", sequenceNo.toString());
-    formData.append("action", "새 단계");
-    formData.append("description", "");
+        ? [
+            ...selectedVideo.steps.slice(0, insertAfterIndex + 1),
+            tempStep,
+            ...selectedVideo.steps.slice(insertAfterIndex + 1),
+          ]
+        : [...selectedVideo.steps, tempStep];
 
-    fetcher.submit(formData, { method: "post" });
-    toast.success("새 단계가 추가되었습니다");
+    setSelectedVideo({ ...selectedVideo, steps: newSteps });
+    toast.success("새 단계가 추가되었습니다 (저장 필요)");
   };
 
-  const handleDeleteStep = async (stepId: number) => {
-    const formData = new FormData();
-    formData.append("actionType", "deleteStep");
-    formData.append("stepId", stepId.toString());
+  const handleDeleteStep = (stepId: number) => {
+    if (!selectedVideo || !isEditMode) return;
 
-    fetcher.submit(formData, { method: "post" });
-    toast.success("단계가 삭제되었습니다");
+    // Add to pending operations
+    setDeletedStepIds((prev) => new Set(prev).add(stepId));
+
+    // Update UI immediately
+    const newSteps = selectedVideo.steps.filter((step) => step.id !== stepId);
+    setSelectedVideo({ ...selectedVideo, steps: newSteps });
+    toast.success("단계가 삭제되었습니다 (저장 필요)");
   };
 
   const handleDeleteWorkflow = (workflowId: string) => {
@@ -902,178 +1047,212 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   };
 
   return (
-    <div className="flex h-full">
-      {/* Desktop Sidebar - Hidden on mobile */}
-      <div className="bg-background hidden w-80 border-r md:block">
-        <div className="border-b p-4">
-          <h2 className="mb-1">업무 목록</h2>
-          <p className="text-muted-foreground text-sm">
-            업무 목록을 관리하고 작업 내용을 프로세스로 문서화하세요
-          </p>
-        </div>
-
-        <div className="h-[calc(100vh-10rem)] overflow-auto">
-          <div className="space-y-2 p-4">
-            {mockVideos.map((video) => (
-              <Card
-                key={video.id}
-                className={`cursor-pointer transition-all hover:shadow-md ${
-                  selectedVideo?.id === video.id
-                    ? "border-[#4169E1] bg-[#4169E1]/5"
-                    : ""
-                }`}
-                onClick={() => {
-                  setSelectedVideo(video);
-                  setIsEditMode(false);
-                  setEditedSteps(new Map());
-                  setIsMobileSidebarOpen(false);
-                }}
-              >
-                <CardContent className="p-4">
-                  <div className="mb-2 flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <FileVideo className="text-muted-foreground h-4 w-4" />
-                      <span className="font-medium">{video.title}</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive hover:text-destructive h-6 w-6"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteWorkflow(video.id);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <Badge
-                      className={
-                        video.status === "analyzed"
-                          ? "bg-green-500 hover:bg-green-600"
-                          : video.status === "analyzing"
-                            ? "bg-blue-500 hover:bg-blue-600"
-                            : "bg-gray-500 hover:bg-gray-600"
-                      }
-                    >
-                      {video.status === "analyzed"
-                        ? "분석 완료"
-                        : video.status === "analyzing"
-                          ? "진행 중"
-                          : "대기"}
-                    </Badge>
-                    <span className="text-muted-foreground">
-                      {video.uploadDate}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+    <>
+      <div className="container mx-auto max-w-7xl p-4 sm:p-6">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <h1 className="text-2xl font-bold sm:text-3xl">
+                  업무 프로세스
+                </h1>
+                <Badge variant="secondary" className="gap-1">
+                  <Sparkles className="size-3" />
+                  관리
+                </Badge>
+              </div>
+              <p className="text-muted-foreground text-sm sm:text-base">
+                업무 동영상을 AI가 자동으로 분석하여 프로세스를 추출합니다
+              </p>
+            </div>
+            <Button size="lg" className="w-full sm:w-auto">
+              <Plus className="mr-2 size-4" />
+              동영상 업로드
+            </Button>
           </div>
         </div>
-      </div>
 
-      {/* Mobile Sidebar Drawer */}
-      <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
-        <SheetContent side="left" className="w-80 p-0">
-          <SheetHeader className="border-b p-4">
-            <SheetTitle>업무 목록</SheetTitle>
-          </SheetHeader>
-          <div className="h-[calc(100vh-8rem)] overflow-auto">
-            <div className="space-y-2 p-4">
-              {mockVideos.map((video) => (
-                <Card
-                  key={video.id}
-                  className={`cursor-pointer transition-all hover:shadow-md ${
-                    selectedVideo?.id === video.id
-                      ? "border-[#4169E1] bg-[#4169E1]/5"
-                      : ""
-                  }`}
-                  onClick={() => {
-                    setSelectedVideo(video);
-                    setIsEditMode(false);
-                    setEditedSteps(new Map());
-                    setIsMobileSidebarOpen(false);
-                  }}
-                >
-                  <CardContent className="p-4">
-                    <div className="mb-2 flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        <FileVideo className="text-muted-foreground h-4 w-4" />
-                        <span className="font-medium">{video.title}</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive h-6 w-6"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteWorkflow(video.id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+        {/* Rate Limit Warning */}
+        {rateLimitWarning && (
+          <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
+            <AlertCircle className="size-5 text-amber-600 dark:text-amber-400" />
+            <AlertTitle className="text-amber-900 dark:text-amber-100">
+              ⚠️ API 요청 제한
+            </AlertTitle>
+            <AlertDescription className="text-amber-800 dark:text-amber-200">
+              서버 요청이 잠시 제한되었습니다. 잠시 후 다시 시도해주세요.
+              페이지를 새로고침하면 정상적으로 로드될 수 있습니다.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {/* Video List Sidebar */}
+          <div className="md:col-span-2 lg:col-span-1">
+            {/* Mobile Header with Hamburger Menu - No Card wrapper */}
+            <div className="mb-4 md:hidden">
+              <Sheet
+                open={isMobileSidebarOpen}
+                onOpenChange={setIsMobileSidebarOpen}
+              >
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" className="mb-4">
+                    <Menu className="mr-2 h-4 w-4" />
+                    업무 목록
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-80 p-0">
+                  <div className="flex h-full flex-col">
+                    <div className="bg-background border-b p-4">
+                      <h2 className="mb-1 flex items-center gap-2">
+                        <FileVideo className="size-5" />
+                        업무 목록
+                      </h2>
+                      <p className="text-muted-foreground text-sm">
+                        업무 목록을 관리하고 작업 내용을 프로세스로 문서화하세요
+                      </p>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
+                    <div className="flex-1 overflow-y-auto">
+                      <div className="p-4">
+                        <div className="space-y-3">
+                          {mockVideos.map((video) => (
+                            <button
+                              key={video.id}
+                              onClick={() => {
+                                setSelectedVideo(video);
+                                setIsEditMode(false);
+                                setEditedSteps(new Map());
+                                setIsMobileSidebarOpen(false);
+                              }}
+                              className={`hover:bg-muted w-full rounded-lg border p-3 text-left transition-colors ${
+                                selectedVideo?.id === video.id
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border"
+                              }`}
+                            >
+                              <div className="mb-2 flex items-start gap-3">
+                                <div className="bg-muted flex size-12 shrink-0 items-center justify-center rounded">
+                                  <FileVideo className="text-muted-foreground size-6" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h3 className="line-clamp-2 text-sm font-medium">
+                                    {video.title}
+                                  </h3>
+                                  <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
+                                    <Clock className="size-3" />
+                                    {video.duration}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <Badge
+                                  variant={
+                                    video.status === "analyzed"
+                                      ? "default"
+                                      : "secondary"
+                                  }
+                                  className="text-xs"
+                                >
+                                  {video.status === "analyzed"
+                                    ? "✅ 분석 완료"
+                                    : video.status === "analyzing"
+                                      ? "⏳ 분석 중"
+                                      : "⏸️ 대기 중"}
+                                </Badge>
+                                <span className="text-muted-foreground text-xs">
+                                  {video.uploadDate}
+                                </span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
+
+            {/* Desktop Card Wrapper - Hidden on Mobile */}
+            <Card className="hidden p-4 md:block">
+              {/* Desktop Header */}
+              <div className="mb-4">
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  <FileVideo className="size-5" />
+                  업무 목록
+                </h2>
+              </div>
+
+              {/* Desktop Work List */}
+              <div className="space-y-3">
+                {mockVideos.map((video) => (
+                  <button
+                    key={video.id}
+                    onClick={() => {
+                      setSelectedVideo(video);
+                      setIsEditMode(false);
+                      setEditedSteps(new Map());
+                    }}
+                    className={`hover:bg-muted w-full rounded-lg border p-3 text-left transition-colors ${
+                      selectedVideo?.id === video.id
+                        ? "border-primary bg-primary/5"
+                        : "border-border"
+                    }`}
+                  >
+                    <div className="mb-2 flex items-start gap-3">
+                      <div className="bg-muted flex size-12 shrink-0 items-center justify-center rounded">
+                        <FileVideo className="text-muted-foreground size-6" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="line-clamp-2 text-sm font-medium">
+                          {video.title}
+                        </h3>
+                        <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
+                          <Clock className="size-3" />
+                          {video.duration}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <Badge
-                        className={
-                          video.status === "analyzed"
-                            ? "bg-green-500 hover:bg-green-600"
-                            : video.status === "analyzing"
-                              ? "bg-blue-500 hover:bg-blue-600"
-                              : "bg-gray-500 hover:bg-gray-600"
+                        variant={
+                          video.status === "analyzed" ? "default" : "secondary"
                         }
+                        className="text-xs"
                       >
                         {video.status === "analyzed"
-                          ? "분석 완료"
+                          ? "✅ 분석 완료"
                           : video.status === "analyzing"
-                            ? "진행 중"
-                            : "대기"}
+                            ? "⏳ 분석 중"
+                            : "⏸️ 대기 중"}
                       </Badge>
-                      <span className="text-muted-foreground">
+                      <span className="text-muted-foreground text-xs">
                         {video.uploadDate}
                       </span>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                  </button>
+                ))}
+              </div>
+            </Card>
           </div>
-        </SheetContent>
-      </Sheet>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
-        {selectedVideo ? (
-          <div className="flex h-full flex-col">
-            {/* Header */}
-            <div className="border-b p-4 md:p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  {/* Mobile menu button */}
-                  {isMobile && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setIsMobileSidebarOpen(true)}
-                      className="md:hidden"
-                    >
-                      <Menu className="h-5 w-5" />
-                    </Button>
-                  )}
-                  <div>
-                    <h1 className="mb-2 text-lg md:text-xl">
+          {/* Main Content - Logic Flow */}
+          <div className="md:col-span-2 lg:col-span-2">
+            {selectedVideo ? (
+              <Card className="p-6">
+                {/* Video Header */}
+                <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex-1">
+                    <h2 className="mb-2 text-xl font-bold sm:text-2xl">
                       {selectedVideo.title}
-                    </h1>
-                    <div className="text-muted-foreground flex flex-col gap-1 text-sm md:flex-row md:items-center md:gap-4">
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-4 w-4" />
+                    </h2>
+                    <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm sm:gap-4">
+                      <span className="flex items-center gap-1">
+                        <Clock className="size-4" />
                         {selectedVideo.duration}
-                      </div>
-                      <Badge variant="secondary">
-                        {selectedVideo.uploadDate}
-                      </Badge>
+                      </span>
+                      <span>{selectedVideo.uploadDate}</span>
                       {selectedVideo.status === "analyzed" && (
                         <Badge
                           variant="outline"
@@ -1085,122 +1264,60 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                       )}
                     </div>
                   </div>
-                </div>
-                <div className="flex gap-1 md:gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsVideoPlayerOpen(true)}
-                    className="hidden md:flex"
-                  >
-                    <Play className="mr-2 size-4" />
-                    원본 동영상 보기
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setIsVideoPlayerOpen(true)}
-                    className="md:hidden"
-                  >
-                    <Play className="size-4" />
-                  </Button>
-                  {isEditMode ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        onClick={handleEditProcess}
-                        className="hidden md:flex"
-                      >
-                        <X className="mr-2 h-4 w-4" />
-                        취소
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={handleEditProcess}
-                        className="md:hidden"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        onClick={handleEditProcess}
-                        className="hidden md:flex"
-                      >
-                        <Save className="mr-2 h-4 w-4" />
-                        저장
-                      </Button>
-                      <Button
-                        size="icon"
-                        onClick={handleEditProcess}
-                        className="md:hidden"
-                      >
-                        <Save className="h-4 w-4" />
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button
-                        onClick={handleEditProcess}
-                        className="hidden md:flex"
-                      >
+                  <div className="flex gap-1 md:gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsVideoPlayerOpen(true)}
+                    >
+                      <Play className="mr-2 size-4" />
+                      원본 동영상 보기
+                    </Button>
+                    {isEditMode ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCancelEdit}
+                        >
+                          <X className="mr-2 h-4 w-4" />
+                          취소
+                        </Button>
+                        <Button size="sm" onClick={handleEditProcess}>
+                          <Save className="mr-2 h-4 w-4" />
+                          저장
+                        </Button>
+                      </>
+                    ) : (
+                      <Button size="sm" onClick={handleEditProcess}>
                         <Edit3 className="mr-2 h-4 w-4" />
                         수정 모드
                       </Button>
-                      <Button
-                        size="icon"
-                        onClick={handleEditProcess}
-                        className="md:hidden"
-                      >
-                        <Edit3 className="h-4 w-4" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 overflow-auto">
-              <div className="p-6">
-                {selectedVideo.status === "analyzed" ? (
-                  <>
-                    {/* 수정 모드 알림 */}
-                    {isEditMode && (
-                      <div className="animate-in fade-in slide-in-from-top-2 mb-6 rounded-lg border-2 border-blue-400 bg-blue-50 p-4 shadow-lg duration-300 dark:border-blue-500 dark:bg-blue-950">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="rounded-full bg-blue-500 p-2">
-                              <Edit className="size-5 text-white" />
-                            </div>
-                            <div>
-                              <h4 className="flex items-center gap-2 font-bold text-blue-900 dark:text-blue-100">
-                                ✏️ 수정 모드 활성화
-                                <Badge
-                                  variant="default"
-                                  className="bg-blue-600"
-                                >
-                                  편집 중
-                                </Badge>
-                              </h4>
-                              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                                각 단계의 제목과 설명을 직접 수정할 수 있습니다.
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setIsEditMode(false)}
-                            className="text-blue-700 hover:text-blue-900 dark:text-blue-300"
-                          >
-                            <X className="size-4" />
-                          </Button>
-                        </div>
-                      </div>
                     )}
+                  </div>
+                </div>
 
-                    <div className="mb-6 flex items-center justify-between">
-                      <h2>단계별 업무 프로세스</h2>
+                {/* 수정 모드 알림 */}
+                {isEditMode && (
+                  <Alert className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950">
+                    <Edit className="size-5 text-blue-600 dark:text-blue-400" />
+                    <AlertTitle className="text-blue-900 dark:text-blue-100">
+                      ✏️ 수정 모드 활성화
+                    </AlertTitle>
+                    <AlertDescription className="text-blue-800 dark:text-blue-200">
+                      각 단계의 제목과 설명을 직접 수정할 수 있습니다.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Logic Steps */}
+                {selectedVideo.status === "analyzed" ? (
+                  <div className="space-y-4">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="flex items-center gap-2 text-lg font-semibold">
+                        <Sparkles className="text-primary size-5" />
+                        단계별 업무 프로세스
+                      </h3>
                       {isEditMode && (
                         <Button
                           variant="outline"
@@ -1213,7 +1330,7 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                       )}
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="relative space-y-8">
                       {isEditMode ? (
                         <DndContext
                           sensors={sensors}
@@ -1226,7 +1343,7 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                           >
                             {selectedVideo.steps.map((step, index) => (
                               <div key={step.id}>
-                                <SortableStep
+                                <DemoStyleStep
                                   step={step}
                                   index={index}
                                   isEditMode={isEditMode}
@@ -1249,160 +1366,40 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                                   getEditedStep={getEditedStep}
                                   handleTypeChange={handleTypeChange}
                                 />
-                                {/* Add step button between steps */}
-                                {index < selectedVideo.steps.length - 1 && (
-                                  <div className="flex justify-center py-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleAddStep(index)}
-                                      className="h-8 w-8 rounded-full p-0"
-                                    >
-                                      <Plus className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                )}
                               </div>
                             ))}
                           </SortableContext>
                         </DndContext>
                       ) : (
                         selectedVideo.steps.map((step, index) => (
-                          <Card
-                            key={step.id}
-                            className={`overflow-hidden transition-all duration-300 ${
-                              isEditMode
-                                ? "shadow-blue-20/20 border-blue-200 bg-white hover:border-blue-300 hover:bg-blue-50 hover:shadow-lg dark:border-blue-600 dark:bg-blue-50/50 dark:hover:bg-blue-100"
-                                : ""
-                            }`}
-                          >
-                            <CardContent className="p-0">
-                              {/* Step Header */}
-                              <div
-                                className={`flex items-center gap-4 border-b p-4 ${
-                                  isEditMode ? "bg-blue-50/50" : "bg-muted/30"
-                                }`}
-                              >
-                                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#4169E1] text-white">
-                                  <span className="text-sm font-medium">
-                                    {index + 1}
-                                  </span>
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <h3 className="font-semibold">
-                                    {step.action}
-                                  </h3>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Badge
-                                    variant="secondary"
-                                    className={getStepColor(step.type)}
-                                  >
-                                    {step.type === "click" && "클릭"}
-                                    {step.type === "input" && "입력"}
-                                    {step.type === "navigate" && "이동"}
-                                    {step.type === "wait" && "대기"}
-                                    {step.type === "decision" && "판단"}
-                                  </Badge>
-                                  {step.timestamp &&
-                                    step.timestamp !== "0:00" && (
-                                      <span className="text-muted-foreground text-sm">
-                                        {step.timestamp}
-                                      </span>
-                                    )}
-                                  <ChevronRight className="text-muted-foreground h-4 w-4" />
-                                </div>
-                              </div>
-
-                              {/* Step Content */}
-                              <div className="space-y-4 p-4">
-                                {/* Screenshot */}
-                                {step.screenshot_url && (
-                                  <div className="bg-muted relative aspect-video overflow-hidden rounded-lg">
-                                    <img
-                                      src={step.screenshot_url}
-                                      alt={step.action}
-                                      className="h-full w-full object-cover"
-                                    />
-                                  </div>
-                                )}
-
-                                {/* Description */}
-                                <div className="bg-muted/50 rounded-lg p-3">
-                                  <p className="text-muted-foreground text-sm">
-                                    {step.description}
-                                  </p>
-                                </div>
-
-                                {/* Notes Section */}
-                                {step.notes ? (
-                                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950">
-                                    <div className="mb-2 flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <Lightbulb className="size-4 text-blue-600 dark:text-blue-400" />
-                                        <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                                          추가 설명
-                                        </span>
-                                      </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => openEditDialog(step)}
-                                      >
-                                        <Edit className="size-3" />
-                                      </Button>
-                                    </div>
-                                    <p className="text-sm text-blue-700 dark:text-blue-300">
-                                      {step.notes}
-                                    </p>
-                                  </div>
-                                ) : (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openEditDialog(step);
-                                    }}
-                                    className="w-full"
-                                  >
-                                    <Plus className="mr-2 size-4" />이 단계에
-                                    메모 추가하기
-                                  </Button>
-                                )}
-                              </div>
-                            </CardContent>
-                          </Card>
+                          <div key={step.id}>
+                            <DemoStyleStep
+                              step={step}
+                              index={index}
+                              isEditMode={isEditMode}
+                              editedStep={getEditedStep(step.id)}
+                              currentAction={
+                                getEditedStep(step.id)?.action || step.action
+                              }
+                              currentDescription={
+                                getEditedStep(step.id)?.description ||
+                                step.description
+                              }
+                              getStepColor={getStepColor}
+                              handleStepTitleChange={handleStepTitleChange}
+                              handleStepDescriptionChange={
+                                handleStepDescriptionChange
+                              }
+                              handleDeleteStep={handleDeleteStep}
+                              openEditDialog={openEditDialog}
+                              getEditedStep={getEditedStep}
+                              handleTypeChange={handleTypeChange}
+                            />
+                          </div>
                         ))
                       )}
                     </div>
-
-                    {/* Helpful Note */}
-                    {!isEditMode && (
-                      <Card className="bg-muted/30 mt-6 border-dashed">
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-3">
-                            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100">
-                              <span className="text-lg">💡</span>
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm">
-                                각 단계에 메모를 추가하면 팀원과 상세한 업무
-                                프로세스를 공유할 수 있어요!
-                              </p>
-                              <Button
-                                variant="link"
-                                className="mt-2 h-auto px-0 text-sm"
-                                onClick={handleEditProcess}
-                              >
-                                프로세스 수정하기
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </>
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <div className="relative mb-4">
@@ -1415,22 +1412,12 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                     <p className="text-muted-foreground mb-1 text-sm">
                       동영상에서 업무 프로세스를 추출하는 중이에요
                     </p>
-                    <p className="text-muted-foreground text-xs">
-                      잠시만 기다려주세요 (1-2분 소요)
-                    </p>
                   </div>
                 )}
-              </div>
-            </div>
+              </Card>
+            ) : null}
           </div>
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <div className="text-center">
-              <FileVideo className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
-              <p className="text-muted-foreground">업무를 선택해주세요</p>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Video Player Dialog */}
@@ -1531,6 +1518,6 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

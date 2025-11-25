@@ -25,6 +25,7 @@ import { Alert, AlertDescription } from "~/core/components/ui/alert";
 import { Badge } from "~/core/components/ui/badge";
 import { Button } from "~/core/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/core/components/ui/card";
+import { Checkbox } from "~/core/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -58,13 +59,12 @@ import {
   TableRow,
 } from "~/core/components/ui/table";
 import { Textarea } from "~/core/components/ui/textarea";
-import { Checkbox } from "~/core/components/ui/checkbox";
 import makeServerClient from "~/core/lib/supa-client.server";
 
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "팀원관리" },
-    { name: "description", content: "팀원 관리 페이지" },
+    { name: "description", content: "팀 관리 페이지" },
   ];
 }
 
@@ -115,11 +115,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export default function TeamManagement({ loaderData }: Route.ComponentProps) {
-  const user = loaderData?.user as {
-    id: string;
-    email: string | null;
-  } & Record<string, any> | null;
-  
+  const user = loaderData?.user as
+    | ({
+        id: string;
+        email: string | null;
+      } & Record<string, any>)
+    | null;
+
   if (!user) {
     return <div>인증되지 않았습니다.</div>;
   }
@@ -138,10 +140,10 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
   const [myStatus, setMyStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  
+
   // 현재 선택된 팀 정보
-  const selectedTeam = teams.find(team => team.team_id === teamId);
-  
+  const selectedTeam = teams.find((team) => team.team_id === teamId);
+
   // Dialog states
   const [isCreateTeamDialogOpen, setIsCreateTeamDialogOpen] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
@@ -149,29 +151,32 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
   const [userWorkflows, setUserWorkflows] = useState<Workflow[]>([]);
   const [selectedWorkflows, setSelectedWorkflows] = useState<string[]>([]);
-  
+
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
   const [inviteToken, setInviteToken] = useState<string | null>(null);
-  
+
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
-  
+
   const [isMigrateDialogOpen, setIsMigrateDialogOpen] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
-  
+
   const [isLoading, setIsLoading] = useState(false);
 
   // Computed values
   const myRole = members.find((m) => m.user_id === typedUser.id)?.role || null;
   const isAdmin = myRole === "owner" || myRole === "admin";
-  
+
   const filteredMembers = members.filter((member) => {
-    const matchesSearch = member.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = filterStatus === "all" || member.status === filterStatus;
+    const matchesSearch = member.email
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+    const matchesStatus =
+      filterStatus === "all" || member.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
 
@@ -224,7 +229,9 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
         const json = await res.json();
         if (!cancelled) {
           setMembers(json.members || []);
-          const myMember = json.members?.find((m: TeamMember) => m.user_id === typedUser.id);
+          const myMember = json.members?.find(
+            (m: TeamMember) => m.user_id === typedUser.id,
+          );
           setMyStatus(myMember?.status || null);
           console.log(`[Team] Set my status to: ${myMember?.status}`);
         }
@@ -245,12 +252,16 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
     let cancelled = false;
     async function loadWorkflows() {
       try {
-        console.log(`[Team] Loading workflows for team: ${teamId}, status: ${myStatus}`);
+        console.log(
+          `[Team] Loading workflows for team: ${teamId}, status: ${myStatus}`,
+        );
         const res = await fetch(`/api/teams/${teamId}/workflows`);
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           console.error(`[Team] API Error: ${res.status}`, errorData);
-          throw new Error(errorData.error || `Failed to load workflows (${res.status})`);
+          throw new Error(
+            errorData.error || `Failed to load workflows (${res.status})`,
+          );
         }
         const json = await res.json();
         console.log(`[Team] Loaded workflows:`, json.workflows);
@@ -275,7 +286,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       try {
         console.log("[Team] Loading user workflows...");
         console.log("[Team] typedUser:", typedUser);
-        
+
         if (!typedUser) {
           console.error("[Team] User not authenticated");
           return;
@@ -285,18 +296,18 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
         console.log("[Team] Fetching from /api/work/workflows...");
         const res = await fetch("/api/work/workflows");
         console.log("[Team] Response status:", res.status);
-        
+
         if (!res.ok) {
           const errorText = await res.text();
           console.error("[Team] API error:", errorText);
           throw new Error("Failed to load user workflows");
         }
-        
+
         const json = await res.json();
         console.log("[Team] API response:", json);
         console.log("[Team] User workflows loaded:", json.workflows);
         console.log("[Team] Workflows count:", json.workflows?.length || 0);
-        
+
         if (!cancelled) {
           setUserWorkflows(json.workflows || []);
           console.log("[Team] State updated with workflows");
@@ -336,44 +347,51 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
 
       const json = await res.json();
       const newTeam = json.team;
-      
+
       // Add new team to the list and select it
       setTeams([newTeam, ...teams]);
       setTeamId(newTeam.team_id);
-      
+
       // Share selected workflows with the new team
       if (selectedWorkflows.length > 0) {
         try {
-          const shareRes = await fetch(`/api/teams/${newTeam.team_id}/workflows/migrate`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              workflow_ids: selectedWorkflows,
-            }),
-          });
-          
+          const shareRes = await fetch(
+            `/api/teams/${newTeam.team_id}/workflows/migrate`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                workflow_ids: selectedWorkflows,
+              }),
+            },
+          );
+
           if (shareRes.ok) {
             const shareJson = await shareRes.json();
-            toast.success(`${shareJson.migrated_count}개의 업무 프로세스가 팀에 공유되었습니다`);
+            toast.success(
+              `${shareJson.migrated_count}개의 업무 프로세스가 팀에 공유되었습니다`,
+            );
           }
         } catch (e) {
           console.error("Failed to share workflows with team", e);
         }
       }
-      
+
       // Load members for the new team
       try {
         const membersRes = await fetch(`/api/teams/${newTeam.team_id}/members`);
         if (membersRes.ok) {
           const membersJson = await membersRes.json();
           setMembers(membersJson.members || []);
-          const myMember = membersJson.members?.find((m: TeamMember) => m.user_id === typedUser.id);
+          const myMember = membersJson.members?.find(
+            (m: TeamMember) => m.user_id === typedUser.id,
+          );
           setMyStatus(myMember?.status || null);
         }
       } catch (e) {
         console.error("Failed to load members after team creation", e);
       }
-      
+
       toast.success("팀이 생성되었습니다");
       setIsCreateTeamDialogOpen(false);
       setNewTeamName("");
@@ -409,7 +427,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       const json = await res.json();
       setInviteToken(json.token);
       toast.success("초대 링크가 생성되었습니다");
-      
+
       // Reload members
       const membersRes = await fetch(`/api/teams/${teamId}/members`);
       if (membersRes.ok) {
@@ -451,16 +469,19 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
 
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/teams/${teamId}/members/${selectedMember.member_id}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `/api/teams/${teamId}/members/${selectedMember.member_id}`,
+        {
+          method: "DELETE",
+        },
+      );
 
       if (!res.ok) throw new Error("삭제 실패");
 
       toast.success("팀원이 삭제되었습니다");
       setIsDeleteDialogOpen(false);
       setSelectedMember(null);
-      
+
       // Reload members
       const membersRes = await fetch(`/api/teams/${teamId}/members`);
       if (membersRes.ok) {
@@ -479,16 +500,19 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
     if (!teamId) return;
 
     try {
-      const res = await fetch(`/api/teams/${teamId}/members/${member.member_id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: newRole }),
-      });
+      const res = await fetch(
+        `/api/teams/${teamId}/members/${member.member_id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: newRole }),
+        },
+      );
 
       if (!res.ok) throw new Error("역할 변경 실패");
 
       toast.success("역할이 변경되었습니다");
-      
+
       // Reload members
       const membersRes = await fetch(`/api/teams/${teamId}/members`);
       if (membersRes.ok) {
@@ -509,7 +533,14 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
 
     console.log("[Share] Team ID:", teamId);
     console.log("[Share] Selected workflows:", selectedWorkflows);
-    console.log("[Share] User workflows available:", userWorkflows.map(w => ({ id: w.workflow_id, title: w.title, team_id: w.team_id })));
+    console.log(
+      "[Share] User workflows available:",
+      userWorkflows.map((w) => ({
+        id: w.workflow_id,
+        title: w.title,
+        team_id: w.team_id,
+      })),
+    );
 
     setIsSharing(true);
     try {
@@ -522,7 +553,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       });
 
       console.log("[Share] Response status:", res.status);
-      
+
       if (!res.ok) {
         const errorText = await res.text();
         console.error("[Share] API error:", errorText);
@@ -531,10 +562,12 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
 
       const json = await res.json();
       console.log("[Share] API response:", json);
-      toast.success(`${json.migrated_count}개의 업무 프로세스가 팀에 공유되었습니다`);
+      toast.success(
+        `${json.migrated_count}개의 업무 프로세스가 팀에 공유되었습니다`,
+      );
       setIsShareDialogOpen(false);
       setSelectedWorkflows([]);
-      
+
       // Reload team workflows
       const workflowsRes = await fetch(`/api/teams/${teamId}/workflows`);
       if (workflowsRes.ok) {
@@ -551,7 +584,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
   // Remove workflow from team
   async function handleRemoveWorkflow(workflowId: string) {
     if (!teamId) return;
-    
+
     try {
       const res = await fetch(`/api/teams/${teamId}/workflows/${workflowId}`, {
         method: "DELETE",
@@ -560,7 +593,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       if (!res.ok) throw new Error("공유 중지 실패");
 
       toast.success("업무 프로세스 공유가 중지되었습니다");
-      
+
       // Reload team workflows
       const workflowsRes = await fetch(`/api/teams/${teamId}/workflows`);
       if (workflowsRes.ok) {
@@ -587,7 +620,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       const json = await res.json();
       toast.success(`${json.migrated_count}개의 워크플로우가 이관되었습니다`);
       setIsMigrateDialogOpen(false);
-      
+
       // Reload workflows
       const workflowsRes = await fetch(`/api/teams/${teamId}/workflows`);
       if (workflowsRes.ok) {
@@ -606,7 +639,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">팀원 관리</h1>
+          <h1 className="text-3xl font-bold">팀 관리</h1>
           <p className="text-muted-foreground mt-1">
             팀원을 초대하고 워크플로우를 공유하세요
           </p>
@@ -616,14 +649,13 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       {/* Team Selection */}
       {teams.length === 0 ? (
         <Card className="p-12 text-center">
-          <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+          <Users className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
           <h3 className="mb-2 text-lg font-semibold">팀이 없습니다</h3>
-          <p className="mb-4 text-sm text-muted-foreground">
+          <p className="text-muted-foreground mb-4 text-sm">
             새로운 팀을 생성하고 팀원들을 초대하여 협업을 시작하세요.
           </p>
           <Button onClick={() => setIsCreateTeamDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            첫 팀 생성하기
+            <Plus className="mr-2 h-4 w-4" />첫 팀 생성하기
           </Button>
         </Card>
       ) : (
@@ -632,19 +664,26 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
             {/* 팀 선택 섹션 헤더 */}
             <div className="flex items-center justify-between">
               <div>
-                <Label htmlFor="team-select" className="text-base font-semibold">
+                <Label
+                  htmlFor="team-select"
+                  className="text-base font-semibold"
+                >
                   팀 선택
                 </Label>
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="text-muted-foreground mt-1 text-sm">
                   관리할 팀을 선택하세요
                 </p>
               </div>
-              
+
               {/* 사용자 정보 배지 */}
               <div className="flex items-center gap-2">
                 {myRole && (
                   <Badge variant="outline" className="text-sm">
-                    {myRole === "owner" ? "소유자" : myRole === "admin" ? "관리자" : "사용자"}
+                    {myRole === "owner"
+                      ? "소유자"
+                      : myRole === "admin"
+                        ? "관리자"
+                        : "사용자"}
                   </Badge>
                 )}
                 {myStatus && (
@@ -652,7 +691,11 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                     variant={myStatus === "active" ? "default" : "secondary"}
                     className="text-sm"
                   >
-                    {myStatus === "active" ? "활동 중" : myStatus === "pending" ? "초대 대기" : "비활성"}
+                    {myStatus === "active"
+                      ? "활동 중"
+                      : myStatus === "pending"
+                        ? "초대 대기"
+                        : "비활성"}
                   </Badge>
                 )}
               </div>
@@ -668,7 +711,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                   {teams.map((team) => (
                     <SelectItem key={team.team_id} value={team.team_id}>
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                        <div className="h-2 w-2 rounded-full bg-blue-500"></div>
                         {team.name}
                       </div>
                     </SelectItem>
@@ -680,8 +723,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 onClick={() => setIsCreateTeamDialogOpen(true)}
                 className="shrink-0"
               >
-                <Plus className="mr-2 h-4 w-4" />
-                새 팀 생성
+                <Plus className="mr-2 h-4 w-4" />새 팀 생성
               </Button>
             </div>
 
@@ -690,26 +732,25 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
               <div className="bg-muted/50 rounded-lg p-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                      <Users className="w-4 h-4 text-blue-600" />
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
+                      <Users className="h-4 w-4 text-blue-600" />
                     </div>
                     <div>
-                      <p className="font-medium text-sm">{selectedTeam.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm font-medium">{selectedTeam.name}</p>
+                      <p className="text-muted-foreground text-xs">
                         {selectedTeam.description || "팀 설명이 없습니다"}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-muted-foreground">팀원 수</p>
+                    <p className="text-muted-foreground text-xs">팀원 수</p>
                     <p className="text-sm font-medium">{members.length}명</p>
                   </div>
                 </div>
               </div>
             )}
           </div>
-        
-      </Card>
+        </Card>
       )}
 
       {/* Status Alert */}
@@ -719,16 +760,17 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
             <>
               <Mail className="h-4 w-4" />
               <AlertDescription>
-                <strong>초대 대기 중입니다.</strong> 이메일로 받은 초대 링크를 통해 팀 가입을 완료해주세요. 
-                초대 링크가 없다면 팀 관리자에게 문의하세요.
+                <strong>초대 대기 중입니다.</strong> 이메일로 받은 초대 링크를
+                통해 팀 가입을 완료해주세요. 초대 링크가 없다면 팀 관리자에게
+                문의하세요.
               </AlertDescription>
             </>
           ) : (
             <>
               <X className="h-4 w-4" />
               <AlertDescription>
-                <strong>팀에서 제외되었습니다.</strong> 팀 활동에 참여할 수 없습니다. 
-                팀 관리자에게 재초대를 요청하세요.
+                <strong>팀에서 제외되었습니다.</strong> 팀 활동에 참여할 수
+                없습니다. 팀 관리자에게 재초대를 요청하세요.
               </AlertDescription>
             </>
           )}
@@ -744,7 +786,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 <Users className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">전체 팀원</p>
+                <p className="text-muted-foreground text-sm">전체 팀원</p>
                 <p className="text-2xl font-bold">{members.length}</p>
               </div>
             </div>
@@ -755,7 +797,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">활동 중</p>
+                <p className="text-muted-foreground text-sm">활동 중</p>
                 <p className="text-2xl font-bold">
                   {members.filter((m) => m.status === "active").length}
                 </p>
@@ -768,7 +810,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 <Mail className="h-5 w-5 text-yellow-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">대기 중</p>
+                <p className="text-muted-foreground text-sm">대기 중</p>
                 <p className="text-2xl font-bold">
                   {members.filter((m) => m.status === "pending").length}
                 </p>
@@ -785,14 +827,10 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold">팀원 목록</h3>
-                <p className="text-sm text-muted-foreground">
-                  팀원 목록입니다
-                </p>
+                <p className="text-muted-foreground text-sm">팀원 목록입니다</p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="outline">
-                  {members.length}명
-                </Badge>
+                <Badge variant="outline">{members.length}명</Badge>
                 {isAdmin && (
                   <Button
                     variant="outline"
@@ -808,7 +846,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
             {/* Search and Filter */}
             <div className="mt-4 flex flex-col gap-4 md:flex-row">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                 <Input
                   placeholder="이메일로 검색..."
                   value={searchQuery}
@@ -832,9 +870,9 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
           <CardContent>
             {filteredMembers.length === 0 ? (
               <div className="py-8 text-center">
-                <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                <Users className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
                 <h4 className="mb-2 text-lg font-semibold">팀원이 없습니다</h4>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   {searchQuery || filterStatus !== "all"
                     ? "검색 조건에 맞는 팀원이 없습니다"
                     : "이 팀에는 아직 팀원이 없습니다"}
@@ -844,8 +882,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                     className="mt-4"
                     onClick={() => setIsInviteDialogOpen(true)}
                   >
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    첫 팀원 초대하기
+                    <UserPlus className="mr-2 h-4 w-4" />첫 팀원 초대하기
                   </Button>
                 )}
               </div>
@@ -859,7 +896,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                       <TableHead>상태</TableHead>
                       <TableHead>초대일</TableHead>
                       <TableHead>가입일</TableHead>
-                      <TableHead >작업</TableHead>
+                      <TableHead>작업</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -872,7 +909,9 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                           {isAdmin && member.role !== "owner" ? (
                             <Select
                               value={member.role}
-                              onValueChange={(val) => handleRoleChange(member, val)}
+                              onValueChange={(val) =>
+                                handleRoleChange(member, val)
+                              }
                               disabled={!isAdmin}
                             >
                               <SelectTrigger className="w-[100px]">
@@ -911,32 +950,38 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {new Date(member.invited_at).toLocaleDateString("ko-KR")}
+                          {new Date(member.invited_at).toLocaleDateString(
+                            "ko-KR",
+                          )}
                         </TableCell>
                         <TableCell>
                           {member.joined_at
-                            ? new Date(member.joined_at).toLocaleDateString("ko-KR")
+                            ? new Date(member.joined_at).toLocaleDateString(
+                                "ko-KR",
+                              )
                             : "-"}
                         </TableCell>
-                        <TableCell >
-                          {isAdmin && member.role !== "owner" && member.status !== "inactive" && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  className="text-destructive"
-                                  onClick={() => openDeleteDialog(member)}
-                                >
-                                  <X className="mr-2 h-4 w-4" />
-                                  팀에서 제외
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
+                        <TableCell>
+                          {isAdmin &&
+                            member.role !== "owner" &&
+                            member.status !== "inactive" && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => openDeleteDialog(member)}
+                                  >
+                                    <X className="mr-2 h-4 w-4" />
+                                    팀에서 제외
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -951,19 +996,16 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       {/* Team Processes Section */}
       {teamId && myStatus === "active" && (
         <Card>
-         
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold">팀 업무 프로세스</h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   업무 프로세스 목록입니다
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="outline">
-                  {teamProcesses.length}개
-                </Badge>
+                <Badge variant="outline">{teamProcesses.length}개</Badge>
                 {isAdmin && (
                   <Button
                     variant="outline"
@@ -983,13 +1025,16 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
           <CardContent>
             {teamProcesses.length === 0 ? (
               <div className="py-8 text-center">
-                <LinkIcon className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                <h4 className="mb-2 text-lg font-semibold">업무 프로세스가 없습니다</h4>
-                <p className="text-sm text-muted-foreground">
+                <LinkIcon className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
+                <h4 className="mb-2 text-lg font-semibold">
+                  업무 프로세스가 없습니다
+                </h4>
+                <p className="text-muted-foreground text-sm">
                   이 팀에는 아직 업무 프로세스가 없습니다.
                 </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  참고: 새 팀을 생성할 때 내 업무 프로세스를 선택하여 공유할 수 있습니다.
+                <p className="text-muted-foreground mt-2 text-xs">
+                  참고: 새 팀을 생성할 때 내 업무 프로세스를 선택하여 공유할 수
+                  있습니다.
                 </p>
               </div>
             ) : (
@@ -997,31 +1042,32 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 {teamProcesses.map((workflow) => (
                   <div
                     key={workflow.workflow_id}
-                    className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/50"
+                    className="hover:bg-muted/50 flex items-center justify-between rounded-lg border p-4"
                   >
                     <div className="flex-1">
                       <h4 className="font-medium">{workflow.title}</h4>
                       {workflow.description && (
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-muted-foreground mt-1 text-sm">
                           {workflow.description}
                         </p>
                       )}
-                      <div className="flex items-center gap-4 mt-2">
+                      <div className="mt-2 flex items-center gap-4">
                         <Badge variant="outline" className="text-xs">
                           {workflow.status}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          생성: {new Date(workflow.created_at).toLocaleDateString("ko-KR")}
+                        <span className="text-muted-foreground text-xs">
+                          생성:{" "}
+                          {new Date(workflow.created_at).toLocaleDateString(
+                            "ko-KR",
+                          )}
                         </span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        asChild
-                      >
-                        <Link to={`/work/business-logic?workflow=${workflow.workflow_id}`}>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link
+                          to={`/work/business-logic?workflow=${workflow.workflow_id}`}
+                        >
                           <Eye className="mr-2 h-4 w-4" />
                           보기
                         </Link>
@@ -1030,7 +1076,11 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleRemoveWorkflow(workflow.workflow_id.toString())}
+                          onClick={() =>
+                            handleRemoveWorkflow(
+                              workflow.workflow_id.toString(),
+                            )
+                          }
                         >
                           <X className="mr-2 h-4 w-4" />
                           공유 중지
@@ -1086,15 +1136,11 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                     readOnly
                     className="text-sm"
                   />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={copyInviteLink}
-                  >
+                  <Button variant="outline" size="sm" onClick={copyInviteLink}>
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                   이 링크를 초대할 팀원에게 전송하세요.
                 </p>
               </div>
@@ -1133,18 +1179,20 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
           <DialogHeader>
             <DialogTitle>팀원 제외</DialogTitle>
             <DialogDescription>
-              선택한 팀원을 팀에서 제외하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+              선택한 팀원을 팀에서 제외하시겠습니까? 이 작업은 되돌릴 수
+              없습니다.
             </DialogDescription>
           </DialogHeader>
           {selectedMember && (
             <div className="py-4">
               <p className="text-sm font-medium">{selectedMember.email}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 {selectedMember.role === "owner"
                   ? "소유자"
                   : selectedMember.role === "admin"
                     ? "관리자"
-                    : "사용자"} · 
+                    : "사용자"}{" "}
+                ·
                 {selectedMember.status === "active"
                   ? "활동 중"
                   : selectedMember.status === "pending"
@@ -1192,8 +1240,8 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                팀 소유자의 모든 미소속 워크플로우가 이 팀으로 이관됩니다.
-                이 작업은 되돌릴 수 없습니다.
+                팀 소유자의 모든 미소속 워크플로우가 이 팀으로 이관됩니다. 이
+                작업은 되돌릴 수 없습니다.
               </AlertDescription>
             </Alert>
             <div className="text-sm">
@@ -1209,10 +1257,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
             >
               취소
             </Button>
-            <Button
-              onClick={handleMigrateWorkflows}
-              disabled={isMigrating}
-            >
+            <Button onClick={handleMigrateWorkflows} disabled={isMigrating}>
               {isMigrating ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1227,13 +1272,16 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       </Dialog>
 
       {/* Create Team Dialog */}
-      <Dialog open={isCreateTeamDialogOpen} onOpenChange={setIsCreateTeamDialogOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+      <Dialog
+        open={isCreateTeamDialogOpen}
+        onOpenChange={setIsCreateTeamDialogOpen}
+      >
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>새 팀 생성</DialogTitle>
             <DialogDescription>
-              새로운 팀을 생성하고 팀 관리자가 됩니다. 
-              내 업무 프로세스를 선택하여 팀에 공유할 수 있습니다.
+              새로운 팀을 생성하고 팀 관리자가 됩니다. 내 업무 프로세스를
+              선택하여 팀에 공유할 수 있습니다.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1258,37 +1306,53 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 rows={3}
               />
             </div>
-            
+
             {/* Workflow Selection */}
             {userWorkflows.length > 0 && (
               <div className="space-y-2">
                 <Label>팀에 공유할 업무 프로세스 선택</Label>
-                <div className="max-h-40 overflow-y-auto border rounded-md p-2">
+                <div className="max-h-40 overflow-y-auto rounded-md border p-2">
                   {userWorkflows.map((workflow: any) => (
-                    <div key={workflow.workflow_id} className="flex items-center space-x-2 py-1">
+                    <div
+                      key={workflow.workflow_id}
+                      className="flex items-center space-x-2 py-1"
+                    >
                       <Checkbox
                         id={`workflow-${workflow.workflow_id}`}
-                        checked={selectedWorkflows.includes(workflow.workflow_id.toString())}
+                        checked={selectedWorkflows.includes(
+                          workflow.workflow_id.toString(),
+                        )}
                         onCheckedChange={(checked) => {
                           if (checked) {
-                            setSelectedWorkflows([...selectedWorkflows, workflow.workflow_id.toString()]);
+                            setSelectedWorkflows([
+                              ...selectedWorkflows,
+                              workflow.workflow_id.toString(),
+                            ]);
                           } else {
-                            setSelectedWorkflows(selectedWorkflows.filter(id => id !== workflow.workflow_id.toString()));
+                            setSelectedWorkflows(
+                              selectedWorkflows.filter(
+                                (id) => id !== workflow.workflow_id.toString(),
+                              ),
+                            );
                           }
                         }}
                         disabled={isCreatingTeam}
                       />
-                      <Label 
+                      <Label
                         htmlFor={`workflow-${workflow.workflow_id}`}
-                        className="text-sm cursor-pointer flex-1 flex items-center gap-2"
+                        className="flex flex-1 cursor-pointer items-center gap-2 text-sm"
                       >
                         <span>{workflow.title}</span>
-                        {workflow.team_id && workflow.team_id !== "" && workflow.team_id !== null && (
-                          <Badge variant="secondary" className="text-xs">
-                            이미 공유됨 (복사됨)
-                          </Badge>
-                        )}
-                        {(!workflow.team_id || workflow.team_id === "" || workflow.team_id === null) && (
+                        {workflow.team_id &&
+                          workflow.team_id !== "" &&
+                          workflow.team_id !== null && (
+                            <Badge variant="secondary" className="text-xs">
+                              이미 공유됨 (복사됨)
+                            </Badge>
+                          )}
+                        {(!workflow.team_id ||
+                          workflow.team_id === "" ||
+                          workflow.team_id === null) && (
                           <Badge variant="outline" className="text-xs">
                             개인
                           </Badge>
@@ -1299,9 +1363,9 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 </div>
               </div>
             )}
-            
+
             {userWorkflows.length === 0 && (
-              <div className="text-sm text-muted-foreground">
+              <div className="text-muted-foreground text-sm">
                 공유할 업무 프로세스가 없습니다.
               </div>
             )}
@@ -1338,7 +1402,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
 
       {/* Share Workflows Dialog */}
       <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>업무 프로세스 공유</DialogTitle>
             <DialogDescription>
@@ -1349,32 +1413,48 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
             {userWorkflows.length > 0 && (
               <div className="space-y-2">
                 <Label>공유할 업무 프로세스 선택</Label>
-                <div className="max-h-60 overflow-y-auto border rounded-md p-2">
+                <div className="max-h-60 overflow-y-auto rounded-md border p-2">
                   {userWorkflows.map((workflow: any) => (
-                    <div key={workflow.workflow_id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded">
+                    <div
+                      key={workflow.workflow_id}
+                      className="flex items-center space-x-2 rounded p-2 hover:bg-gray-50"
+                    >
                       <Checkbox
                         id={`share-workflow-${workflow.workflow_id}`}
-                        checked={selectedWorkflows.includes(workflow.workflow_id.toString())}
+                        checked={selectedWorkflows.includes(
+                          workflow.workflow_id.toString(),
+                        )}
                         onCheckedChange={(checked) => {
                           if (checked) {
-                            setSelectedWorkflows([...selectedWorkflows, workflow.workflow_id.toString()]);
+                            setSelectedWorkflows([
+                              ...selectedWorkflows,
+                              workflow.workflow_id.toString(),
+                            ]);
                           } else {
-                            setSelectedWorkflows(selectedWorkflows.filter(id => id !== workflow.workflow_id.toString()));
+                            setSelectedWorkflows(
+                              selectedWorkflows.filter(
+                                (id) => id !== workflow.workflow_id.toString(),
+                              ),
+                            );
                           }
                         }}
                         disabled={isSharing}
                       />
-                      <Label 
+                      <Label
                         htmlFor={`share-workflow-${workflow.workflow_id}`}
-                        className="text-sm cursor-pointer flex-1 flex items-center gap-2"
+                        className="flex flex-1 cursor-pointer items-center gap-2 text-sm"
                       >
                         <span>{workflow.title}</span>
-                        {workflow.team_id && workflow.team_id !== "" && workflow.team_id !== null && (
-                          <Badge variant="secondary" className="text-xs">
-                            이미 공유됨 (복사됨)
-                          </Badge>
-                        )}
-                        {(!workflow.team_id || workflow.team_id === "" || workflow.team_id === null) && (
+                        {workflow.team_id &&
+                          workflow.team_id !== "" &&
+                          workflow.team_id !== null && (
+                            <Badge variant="secondary" className="text-xs">
+                              이미 공유됨 (복사됨)
+                            </Badge>
+                          )}
+                        {(!workflow.team_id ||
+                          workflow.team_id === "" ||
+                          workflow.team_id === null) && (
                           <Badge variant="outline" className="text-xs">
                             개인
                           </Badge>
@@ -1385,9 +1465,9 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 </div>
               </div>
             )}
-            
+
             {userWorkflows.length === 0 && (
-              <div className="text-sm text-muted-foreground">
+              <div className="text-muted-foreground text-sm">
                 공유할 업무 프로세스가 없습니다.
               </div>
             )}

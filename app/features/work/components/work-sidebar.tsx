@@ -79,7 +79,7 @@ export default function WorkSidebar(
   if (isSuperAdmin) {
     navItems.push({
       title: "관리자 대시보드",
-      url: "/admin/super-dashboard",
+      url: "/admin",
       icon: ShieldCheckIcon,
     });
   }

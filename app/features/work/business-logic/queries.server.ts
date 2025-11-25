@@ -3,7 +3,7 @@
  *
  * This module contains all database queries related to workflows and analysis steps.
  */
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 
 import db from "~/core/db/drizzle-client.server";
 
@@ -216,11 +216,11 @@ export async function addStep(
   // First, shift all existing steps at or after this position down by 1
   await db
     .update(workAnalysisSteps)
-    .set({ sequence_no: db.raw("sequence_no + 1") })
+    .set({ sequence_no: sql`sequence_no + 1` })
     .where(
       and(
         eq(workAnalysisSteps.workflow_id, workflowId),
-        db.raw("sequence_no >= ?", [sequenceNo]),
+        gte(workAnalysisSteps.sequence_no, sequenceNo),
       ),
     );
 

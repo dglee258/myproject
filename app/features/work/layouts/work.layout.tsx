@@ -1,5 +1,6 @@
 import type { Route } from "./+types/work.layout";
 
+import { eq } from "drizzle-orm";
 import { Outlet } from "react-router";
 import { redirect } from "react-router";
 
@@ -8,11 +9,9 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "~/core/components/ui/sidebar";
-import makeServerClient from "~/core/lib/supa-client.server";
-
 import db from "~/core/db/drizzle-client.server";
+import makeServerClient from "~/core/lib/supa-client.server";
 import { profiles } from "~/features/users/schema";
-import { eq } from "drizzle-orm";
 
 import WorkSidebar from "../components/work-sidebar";
 
@@ -60,11 +59,11 @@ export default function WorkLayout({ loaderData }: Route.ComponentProps) {
         isSuperAdmin={isSuperAdmin}
       />
       <SidebarInset>
-        <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4 lg:hidden">
+        <header className="bg-background sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b px-4 lg:hidden">
           <SidebarTrigger className="-ml-1" />
           <h1 className="text-lg font-semibold">업무 관리</h1>
         </header>
-        <div className="flex-1 p-4 sm:p-6">
+        <div className="flex h-full flex-1 p-4 sm:p-6">
           <Outlet />
         </div>
       </SidebarInset>
