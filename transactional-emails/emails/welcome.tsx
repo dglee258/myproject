@@ -88,7 +88,7 @@ export default function WelcomeEmail({
             </Section>
 
             <Section style={feature}>
-              <Text style={featureTitle}>👥 팀원 관리</Text>
+              <Text style={featureTitle}>👥 팀 관리</Text>
               <Text style={featureText}>
                 팀원을 초대하고 함께 업무프로세스를 관리하며 협업 효율을
                 높여보세요.

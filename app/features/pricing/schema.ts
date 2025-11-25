@@ -9,12 +9,14 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-import { timestamps } from "~/core/db/helpers.server";
+// Helper function moved inline to avoid server/client code splitting
+const timestamps = {
+  updated_at: timestamp().defaultNow().notNull(),
+  created_at: timestamp().defaultNow().notNull(),
+};
 
 export const pricingPlans = pgTable("pricing_plans", {
-  plan_id: bigint({ mode: "number" })
-    .primaryKey()
-    .generatedAlwaysAsIdentity(),
+  plan_id: bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
   name: varchar({ length: 100 }).notNull(),
   description: text(),
   price_monthly: integer().notNull(),

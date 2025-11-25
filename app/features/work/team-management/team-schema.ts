@@ -1,8 +1,28 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp, uuid, pgEnum, pgPolicy, bigint } from "drizzle-orm/pg-core";
-import { authUsers, authUid, authenticatedRole } from "drizzle-orm/supabase";
-import { makeIdentityColumn, timestamps } from "~/core/db/helpers.server";
+import {
+  bigint,
+  pgEnum,
+  pgPolicy,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
+import { authUid, authUsers, authenticatedRole } from "drizzle-orm/supabase";
+
 import { workWorkflows } from "../business-logic/schema";
+
+// Helper functions moved inline to avoid server/client code splitting
+const timestamps = {
+  updated_at: timestamp().defaultNow().notNull(),
+  created_at: timestamp().defaultNow().notNull(),
+};
+
+function makeIdentityColumn(name: string) {
+  return {
+    [name]: bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  };
+}
 
 // 팀 멤버 상태
 export const teamMemberStatusEnum = pgEnum("team_member_status", [

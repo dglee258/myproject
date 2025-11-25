@@ -59,7 +59,6 @@ import {
   TableRow,
 } from "~/core/components/ui/table";
 import { Textarea } from "~/core/components/ui/textarea";
-import makeServerClient from "~/core/lib/supa-client.server";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -102,6 +101,9 @@ interface Workflow {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
+  const { default: makeServerClient } = await import(
+    "~/core/lib/supa-client.server"
+  );
   const [client] = makeServerClient(request);
   const {
     data: { user },

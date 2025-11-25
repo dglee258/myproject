@@ -13,7 +13,6 @@ import { useLoaderData, useSearchParams } from "react-router";
 import { Button } from "~/core/components/ui/button";
 import { Progress } from "~/core/components/ui/progress";
 import { supabaseBrowser } from "~/core/lib/supa-client.client";
-import makeServerClient from "~/core/lib/supa-client.server";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -34,6 +33,9 @@ interface VideoFile {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
+  const { default: makeServerClient } = await import(
+    "~/core/lib/supa-client.server"
+  );
   const [supabase] = makeServerClient(request);
   const {
     data: { user },

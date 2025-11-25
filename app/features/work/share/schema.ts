@@ -1,10 +1,29 @@
-import { pgEnum, pgPolicy, pgTable, text, timestamp, uuid, bigint } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { authUsers, authUid, authenticatedRole } from "drizzle-orm/supabase";
-import { workWorkflows } from "../business-logic/schema";
-import { timestamps } from "~/core/db/helpers.server";
+import {
+  bigint,
+  pgEnum,
+  pgPolicy,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
+import { authUid, authUsers, authenticatedRole } from "drizzle-orm/supabase";
 
-export const shareStatus = pgEnum("share_status", ["active", "claimed", "revoked", "expired"]);
+import { workWorkflows } from "../business-logic/schema";
+
+// Helper function moved inline to avoid server/client code splitting
+const timestamps = {
+  updated_at: timestamp().defaultNow().notNull(),
+  created_at: timestamp().defaultNow().notNull(),
+};
+
+export const shareStatus = pgEnum("share_status", [
+  "active",
+  "claimed",
+  "revoked",
+  "expired",
+]);
 
 export const workShareTokens = pgTable(
   "work_share_tokens",

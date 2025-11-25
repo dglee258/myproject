@@ -28,7 +28,6 @@ import {
 } from "~/core/components/ui/card";
 import { Input } from "~/core/components/ui/input";
 import { Label } from "~/core/components/ui/label";
-import resendClient from "~/core/lib/resend-client.server";
 import makeServerClient from "~/core/lib/supa-client.server";
 
 /**

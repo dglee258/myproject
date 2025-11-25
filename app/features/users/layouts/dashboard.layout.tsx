@@ -6,13 +6,15 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "~/core/components/ui/sidebar";
-import db from "~/core/db/drizzle-client.server";
-import makeServerClient from "~/core/lib/supa-client.server";
 import { profiles } from "~/features/users/schema";
 
 import DashboardSidebar from "../components/dashboard-sidebar";
 
 export async function loader({ request }: { request: Request }) {
+  const [{ default: db }, { default: makeServerClient }] = await Promise.all([
+    import("~/core/db/drizzle-client.server"),
+    import("~/core/lib/supa-client.server"),
+  ]);
   const [client] = makeServerClient(request);
   const {
     data: { user },

@@ -11,8 +11,19 @@ import {
 } from "drizzle-orm/pg-core";
 import { authUid, authUsers, authenticatedRole } from "drizzle-orm/supabase";
 
-import { makeIdentityColumn, timestamps } from "~/core/db/helpers.server";
 import { workWorkflows } from "../business-logic/schema";
+
+// Helper functions moved inline to avoid server/client code splitting
+const timestamps = {
+  updated_at: timestamp().defaultNow().notNull(),
+  created_at: timestamp().defaultNow().notNull(),
+};
+
+function makeIdentityColumn(name: string) {
+  return {
+    [name]: bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  };
+}
 
 export const memberRole = pgEnum("member_role", ["admin", "member"]);
 export const memberStatus = pgEnum("member_status", [
@@ -75,7 +86,9 @@ export const workWorkflowInvites = pgTable(
     token: text().notNull(),
     invited_by: uuid().references(() => authUsers.id, { onDelete: "set null" }),
     expires_at: timestamp(),
-    accepted_by: uuid().references(() => authUsers.id, { onDelete: "set null" }),
+    accepted_by: uuid().references(() => authUsers.id, {
+      onDelete: "set null",
+    }),
     accepted_at: timestamp(),
     ...timestamps,
   },

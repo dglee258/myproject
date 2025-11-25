@@ -94,9 +94,6 @@ import {
 } from "~/core/components/ui/sheet";
 import { Textarea } from "~/core/components/ui/textarea";
 import { useIsMobile } from "~/core/hooks/use-mobile";
-import makeServerClient from "~/core/lib/supa-client.server";
-
-import { getUserWorkflows } from "../queries.server";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -110,6 +107,11 @@ export function meta({}: Route.MetaArgs) {
 
 export async function loader({ request }: Route.LoaderArgs) {
   try {
+    const [{ default: makeServerClient }, { getUserWorkflows }] =
+      await Promise.all([
+        import("~/core/lib/supa-client.server"),
+        import("../queries.server"),
+      ]);
     const [client] = makeServerClient(request);
     const {
       data: { user },
@@ -145,6 +147,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 // 메모 저장 및 스텝 편집 action
 export async function action({ request }: Route.ActionArgs) {
+  const { default: makeServerClient } = await import(
+    "~/core/lib/supa-client.server"
+  );
   const [client] = makeServerClient(request);
   const {
     data: { user },

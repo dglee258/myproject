@@ -29,7 +29,6 @@ import FormErrors from "~/core/components/form-error";
 import { Input } from "~/core/components/ui/input";
 import { Label } from "~/core/components/ui/label";
 import { Textarea } from "~/core/components/ui/textarea";
-import resendClient from "~/core/lib/resend-client.server";
 
 /**
  * Meta function for setting page metadata
@@ -213,6 +212,9 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   // Send email to admin with contact information
+  const { default: resendClient } = await import(
+    "~/core/lib/resend-client.server"
+  );
   const { error } = await resendClient.emails.send({
     from:
       process.env.NODE_ENV === "development"

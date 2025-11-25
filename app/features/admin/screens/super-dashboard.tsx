@@ -1,13 +1,29 @@
-import { Card, CardContent, CardHeader, CardTitle } from "~/core/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/core/components/ui/table";
-import makeServerClient from "~/core/lib/supa-client.server";
-import db from "~/core/db/drizzle-client.server";
-import { profiles } from "~/features/users/schema";
-import { adminActivityLogs, adminDailyStats } from "../schema";
 import { and, desc, eq } from "drizzle-orm";
 import { data, redirect } from "react-router";
 
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "~/core/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/core/components/ui/table";
+import { profiles } from "~/features/users/schema";
+
+import { adminActivityLogs, adminDailyStats } from "../schema";
+
 export async function loader({ request }: any) {
+  const [{ default: makeServerClient }, { default: db }] = await Promise.all([
+    import("~/core/lib/supa-client.server"),
+    import("~/core/db/drizzle-client.server"),
+  ]);
   const [client] = makeServerClient(request);
   const {
     data: { user },
@@ -58,9 +74,7 @@ export default function SuperDashboard({ loaderData }: any) {
             <CardTitle>전체 사용자 수</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">
-              {stats?.total_users ?? "-"}
-            </p>
+            <p className="text-2xl font-bold">{stats?.total_users ?? "-"}</p>
           </CardContent>
         </Card>
         <Card>
@@ -78,9 +92,7 @@ export default function SuperDashboard({ loaderData }: any) {
             <CardTitle>전체 분석 요청 수</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">
-              {stats?.total_analyses ?? "-"}
-            </p>
+            <p className="text-2xl font-bold">{stats?.total_analyses ?? "-"}</p>
           </CardContent>
         </Card>
       </div>
@@ -91,7 +103,9 @@ export default function SuperDashboard({ loaderData }: any) {
         </CardHeader>
         <CardContent>
           {logs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">표시할 로그가 없습니다.</p>
+            <p className="text-muted-foreground text-sm">
+              표시할 로그가 없습니다.
+            </p>
           ) : (
             <div className="rounded-md border">
               <Table>

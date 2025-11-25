@@ -3,8 +3,6 @@ import type { Route } from "./+types/account";
 import { Suspense } from "react";
 import { Await } from "react-router";
 
-import makeServerClient from "~/core/lib/supa-client.server";
-
 import ChangeEmailForm from "../components/forms/change-email-form";
 import ChangePasswordForm from "../components/forms/change-password-form";
 import ConnectSocialAccountsForm from "../components/forms/connect-social-accounts-form";
@@ -17,6 +15,9 @@ export const meta: Route.MetaFunction = () => {
 };
 
 export async function loader({ request }: Route.LoaderArgs) {
+  const { default: makeServerClient } = await import(
+    "~/core/lib/supa-client.server"
+  );
   const [client] = makeServerClient(request);
   const {
     data: { user },

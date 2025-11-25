@@ -5,9 +5,11 @@ import { Await, Outlet } from "react-router";
 
 import Footer from "../components/footer";
 import { NavigationBar } from "../components/navigation-bar";
-import makeServerClient from "../lib/supa-client.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
+  const { default: makeServerClient } = await import(
+    "../lib/supa-client.server"
+  );
   const [client] = makeServerClient(request);
   const userPromise = client.auth.getUser();
   return { userPromise };

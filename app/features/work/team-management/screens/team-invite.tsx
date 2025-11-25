@@ -1,20 +1,30 @@
+import { CheckCircle, Clock, Users, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
-import { redirect, useParams, useNavigate } from "react-router";
-import { Button } from "~/core/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/core/components/ui/card";
-import { Alert, AlertDescription } from "~/core/components/ui/alert";
-import { CheckCircle, XCircle, Clock, Users } from "lucide-react";
+import { redirect, useNavigate, useParams } from "react-router";
 
-import makeServerClient from "~/core/lib/supa-client.server";
+import { Alert, AlertDescription } from "~/core/components/ui/alert";
+import { Button } from "~/core/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/core/components/ui/card";
 
 export async function loader({ request }: { request: Request }) {
+  const { default: makeServerClient } = await import(
+    "~/core/lib/supa-client.server"
+  );
   const [client] = makeServerClient(request);
   const {
     data: { user },
   } = await client.auth.getUser();
   if (!user) {
     const url = new URL(request.url);
-    throw redirect(`/login?redirectTo=${encodeURIComponent(url.pathname + url.search)}`);
+    throw redirect(
+      `/login?redirectTo=${encodeURIComponent(url.pathname + url.search)}`,
+    );
   }
   return null;
 }
@@ -103,8 +113,8 @@ export default function TeamInvite() {
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
             <div className="flex items-center justify-center">
-              <Clock className="h-8 w-8 animate-spin text-muted-foreground" />
-              <p className="ml-3 text-muted-foreground">초대 정보 확인 중...</p>
+              <Clock className="text-muted-foreground h-8 w-8 animate-spin" />
+              <p className="text-muted-foreground ml-3">초대 정보 확인 중...</p>
             </div>
           </CardContent>
         </Card>
@@ -118,13 +128,15 @@ export default function TeamInvite() {
         <Card className="w-full max-w-md">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <XCircle className="h-6 w-6 text-destructive" />
+              <XCircle className="text-destructive h-6 w-6" />
               <CardTitle>초대를 찾을 수 없습니다</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
             <Alert variant="destructive">
-              <AlertDescription>{error || "유효하지 않은 초대 링크입니다"}</AlertDescription>
+              <AlertDescription>
+                {error || "유효하지 않은 초대 링크입니다"}
+              </AlertDescription>
             </Alert>
             <Button onClick={() => navigate("/work")} className="mt-4 w-full">
               홈으로 돌아가기
@@ -171,7 +183,12 @@ export default function TeamInvite() {
             <CardDescription>이 초대는 이미 수락되었습니다</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => navigate(`/work/team-management?team=${team.team_id}`)} className="w-full">
+            <Button
+              onClick={() =>
+                navigate(`/work/team-management?team=${team.team_id}`)
+              }
+              className="w-full"
+            >
               팀 관리로 이동
             </Button>
           </CardContent>
@@ -186,7 +203,7 @@ export default function TeamInvite() {
         <Card className="w-full max-w-md">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <XCircle className="h-6 w-6 text-destructive" />
+              <XCircle className="text-destructive h-6 w-6" />
               <CardTitle>만료된 초대</CardTitle>
             </div>
             <CardDescription>이 초대는 만료되었습니다</CardDescription>
@@ -211,7 +228,7 @@ export default function TeamInvite() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Users className="h-6 w-6 text-primary" />
+            <Users className="text-primary h-6 w-6" />
             <CardTitle>팀 초대</CardTitle>
           </div>
           <CardDescription>팀에 초대되었습니다</CardDescription>
@@ -220,11 +237,13 @@ export default function TeamInvite() {
           <div>
             <h3 className="text-lg font-semibold">{team.name}</h3>
             {team.description && (
-              <p className="text-sm text-muted-foreground">{team.description}</p>
+              <p className="text-muted-foreground text-sm">
+                {team.description}
+              </p>
             )}
           </div>
 
-          <div className="space-y-2 rounded-lg bg-muted p-4">
+          <div className="bg-muted space-y-2 rounded-lg p-4">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">초대 이메일:</span>
               <span className="font-medium">{invite.email}</span>

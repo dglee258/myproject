@@ -12,7 +12,11 @@ import {
 } from "drizzle-orm/pg-core";
 import { authUid, authUsers, authenticatedRole } from "drizzle-orm/supabase";
 
-import { timestamps } from "~/core/db/helpers.server";
+// Helper function moved inline to avoid server/client code splitting
+const timestamps = {
+  updated_at: timestamp().defaultNow().notNull(),
+  created_at: timestamp().defaultNow().notNull(),
+};
 
 export const uploadStatus = pgEnum("upload_status", [
   "idle",

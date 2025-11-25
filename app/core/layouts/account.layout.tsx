@@ -4,10 +4,13 @@ import { ArrowLeftIcon } from "lucide-react";
 import { Outlet, useNavigate } from "react-router";
 
 import { Button } from "../components/ui/button";
-import { requireAuthentication } from "../lib/guards.server";
-import makeServerClient from "../lib/supa-client.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
+  const [{ default: makeServerClient }, { requireAuthentication }] =
+    await Promise.all([
+      import("../lib/supa-client.server"),
+      import("../lib/guards.server"),
+    ]);
   const [client] = makeServerClient(request);
   await requireAuthentication(client);
   return {};

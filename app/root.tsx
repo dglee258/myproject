@@ -43,8 +43,6 @@ import { Toaster } from "sonner";
 
 import { Dialog } from "./core/components/ui/dialog";
 import { Sheet } from "./core/components/ui/sheet";
-import i18next from "./core/lib/i18next.server";
-import { themeSessionResolver } from "./core/lib/theme-session.server";
 import { cn } from "./core/lib/utils";
 import NotFound from "./core/screens/404";
 
@@ -94,9 +92,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 
   // Concurrently load theme and locale preferences for better performance
+  const [{ themeSessionResolver }, i18next] = await Promise.all([
+    import("./core/lib/theme-session.server"),
+    import("./core/lib/i18next.server"),
+  ]);
   const [{ getTheme }, locale] = await Promise.all([
     themeSessionResolver(request),
-    i18next.getLocale(request),
+    i18next.default.getLocale(request),
   ]);
 
   return {

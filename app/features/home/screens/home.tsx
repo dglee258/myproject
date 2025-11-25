@@ -1,73 +1,76 @@
 /**
  * Home Page Component
- * 
+ *
  * This file implements the main landing page of the application with internationalization support.
  * It demonstrates the use of i18next for multi-language content, React Router's data API for
  * server-side rendering, and responsive design with Tailwind CSS.
- * 
+ *
  * Key features:
  * - Server-side translation with i18next
  * - Client-side translation with useTranslation hook
  * - SEO-friendly metadata using React Router's meta export
  * - Responsive typography with Tailwind CSS
  */
-
 import type { Route } from "./+types/home";
 
-import { Link, redirect } from "react-router";
+import { ArrowRight, LogIn, Play, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Sparkles, LogIn, Play } from "lucide-react";
+import { Link, redirect } from "react-router";
 
 import { Button } from "~/core/components/ui/button";
 import { Card } from "~/core/components/ui/card";
-import i18next from "~/core/lib/i18next.server";
-import makeServerClient from "~/core/lib/supa-client.server";
 
 /**
  * Loader function for server-side data fetching
- * 
+ *
  * This function redirects all home page requests to the login page.
- * 
+ *
  * @param request - The incoming HTTP request
  * @returns Redirect to login page
  */
 export async function loader({ request }: Route.LoaderArgs) {
   // Check if user is authenticated
+  const [{ default: makeServerClient }, i18next] = await Promise.all([
+    import("~/core/lib/supa-client.server"),
+    import("~/core/lib/i18next.server"),
+  ]);
   const [client] = makeServerClient(request);
-  const { data: { user } } = await client.auth.getUser();
-  
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+
   // If user is logged in, redirect to work page
   if (user) {
     return redirect("/work");
   }
-  
+
   // Load translations for server-side rendering
-  const t = await i18next.getFixedT(request);
+  const t = await i18next.default.getFixedT(request);
   return { title: t("home.title") };
 }
 
 /**
  * Home page component
- * 
+ *
  * This is the main landing page component of the application. It displays a simple,
  * centered layout with a headline and subtitle, both internationalized using i18next.
- * 
+ *
  * Features:
  * - Uses the useTranslation hook for client-side translation
  * - Implements responsive design with Tailwind CSS
  * - Maintains consistent translations between server and client
- * 
+ *
  * The component is intentionally simple to serve as a starting point for customization.
  * It demonstrates the core patterns used throughout the application:
  * - Internationalization
  * - Responsive design
  * - Clean, semantic HTML structure
- * 
+ *
  * @returns JSX element representing the home page
  */
 export default function Home() {
   const { t } = useTranslation();
-  
+
   return (
     <div className="container mx-auto max-w-6xl px-4 py-12 sm:py-20">
       <div className="flex flex-col items-center justify-center gap-8 text-center">
@@ -97,7 +100,11 @@ export default function Home() {
             </Button>
           </Link>
           <Link to="/demo">
-            <Button size="lg" variant="outline" className="group w-full gap-2 sm:w-auto">
+            <Button
+              size="lg"
+              variant="outline"
+              className="group w-full gap-2 sm:w-auto"
+            >
               <Play className="size-5 transition-transform group-hover:scale-110" />
               무료 체험하기
               <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
@@ -116,7 +123,7 @@ export default function Home() {
               동영상에서 업무 단계를 자동으로 추출하고 분석합니다
             </p>
           </Card>
-          
+
           <Card className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 dark:from-purple-950 dark:to-pink-950">
             <div className="mb-3 flex items-center gap-2">
               <span className="text-xl">📝</span>
@@ -126,7 +133,7 @@ export default function Home() {
               단계별로 정리된 업무 프로세스를 팀원들과 공유하세요
             </p>
           </Card>
-          
+
           <Card className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 dark:from-green-950 dark:to-emerald-950">
             <div className="mb-3 flex items-center gap-2">
               <span className="text-xl">👥</span>

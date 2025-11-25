@@ -1,4 +1,4 @@
-import { sql, relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -13,9 +13,14 @@ import {
 } from "drizzle-orm/pg-core";
 import { authUid, authUsers, authenticatedRole } from "drizzle-orm/supabase";
 
-import { timestamps } from "~/core/db/helpers.server";
-import { workVideos } from "../upload/schema";
 import { workTeams } from "../team-management/team-schema";
+import { workVideos } from "../upload/schema";
+
+// Helper function moved inline to avoid server/client code splitting
+const timestamps = {
+  updated_at: timestamp().defaultNow().notNull(),
+  created_at: timestamp().defaultNow().notNull(),
+};
 
 export const stepType = pgEnum("step_type", [
   "click",
@@ -38,7 +43,9 @@ export const workWorkflows = pgTable(
       .primaryKey()
       .generatedAlwaysAsIdentity(),
     owner_id: uuid().references(() => authUsers.id, { onDelete: "cascade" }),
-    team_id: uuid().references(() => workTeams.team_id, { onDelete: "cascade" }),
+    team_id: uuid().references(() => workTeams.team_id, {
+      onDelete: "cascade",
+    }),
     title: text().notNull(),
     description: text(),
     source_video_id: bigint({ mode: "number" }).references(
@@ -168,13 +175,16 @@ export const workAnalysisSteps = pgTable(
 );
 
 // Relations
-export const workWorkflowsRelations = relations(workWorkflows, ({ many, one }) => ({
-  steps: many(workAnalysisSteps),
-  sourceVideo: one(workVideos, {
-    fields: [workWorkflows.source_video_id],
-    references: [workVideos.video_id],
+export const workWorkflowsRelations = relations(
+  workWorkflows,
+  ({ many, one }) => ({
+    steps: many(workAnalysisSteps),
+    sourceVideo: one(workVideos, {
+      fields: [workWorkflows.source_video_id],
+      references: [workVideos.video_id],
+    }),
   }),
-}));
+);
 
 export const workAnalysisStepsRelations = relations(
   workAnalysisSteps,
