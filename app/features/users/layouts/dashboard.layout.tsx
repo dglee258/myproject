@@ -1,5 +1,4 @@
-import type { Route } from "./+types/dashboard.layout";
-
+import { eq } from "drizzle-orm";
 import { Outlet } from "react-router";
 
 import {
@@ -7,15 +6,13 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "~/core/components/ui/sidebar";
-import makeServerClient from "~/core/lib/supa-client.server";
-
 import db from "~/core/db/drizzle-client.server";
+import makeServerClient from "~/core/lib/supa-client.server";
 import { profiles } from "~/features/users/schema";
-import { eq } from "drizzle-orm";
 
 import DashboardSidebar from "../components/dashboard-sidebar";
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request }: { request: Request }) {
   const [client] = makeServerClient(request);
   const {
     data: { user },
@@ -37,7 +34,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   };
 }
 
-export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
+export default function DashboardLayout({ loaderData }: { loaderData: any }) {
   const { user, isSuperAdmin } = loaderData as any;
   return (
     <SidebarProvider>

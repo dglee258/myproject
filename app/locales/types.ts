@@ -4,8 +4,8 @@ export type Translation = {
     subtitle: string;
   };
   navigation: {
-    // en: string;
+    en: string;
     kr: string;
-    // es: string;
+    es: string;
   };
 };

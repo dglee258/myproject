@@ -6,9 +6,9 @@ const ko: Translation = {
     subtitle: "DashBoard",
   },
   navigation: {
+    en: "영어",
     kr: "한국어",
-    // es: "스페인어",
-    // en: "영어",
+    es: "스페인어",
   },
 };
 

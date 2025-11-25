@@ -181,6 +181,7 @@ export default [
     ...prefix("/payments", [
       route("/checkout", "features/payments/screens/checkout.tsx"),
       layout("core/layouts/private.layout.tsx", { id: "private-payments" }, [
+        index("features/payments/screens/payments.tsx"),
         route("/success", "features/payments/screens/success.tsx"),
         route("/failure", "features/payments/screens/failure.tsx"),
       ]),
