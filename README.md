@@ -1,4 +1,4 @@
-# 싱크로 (Syncro)
+# 싱크로 (synchro)
 
 React Router와 Supabase 기반의 현대적인 웹 애플리케이션
 
