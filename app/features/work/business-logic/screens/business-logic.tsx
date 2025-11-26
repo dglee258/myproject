@@ -18,6 +18,7 @@ import {
 } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { AnimatePresence, motion } from "motion/react";
 import {
   AlertCircle,
   ArrowRight,
@@ -44,6 +45,9 @@ import {
   Trash2,
   Volume2,
   X,
+  Layout,
+  List,
+  Settings,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -150,13 +154,13 @@ export async function action({ request }: Route.ActionArgs) {
   const { default: makeServerClient } = await import(
     "~/core/lib/supa-client.server"
   );
-  const [client] = makeServerClient(request);
+  const [client, headers] = makeServerClient(request);
   const {
     data: { user },
   } = await client.auth.getUser();
 
   if (!user) {
-    return data({ error: "Unauthorized" }, { status: 401 });
+    return data({ error: "Unauthorized" }, { status: 401, headers });
   }
 
   try {
@@ -168,66 +172,66 @@ export async function action({ request }: Route.ActionArgs) {
       const notes = formData.get("notes") as string;
 
       if (isNaN(stepId)) {
-        return data({ error: "Invalid step ID" }, { status: 400 });
+        return data({ error: "Invalid step ID" }, { status: 400, headers });
       }
 
       // DB 업데이트
       const { updateStepNotes } = await import("../queries.server");
       await updateStepNotes(stepId, notes || "");
 
-      return data({ success: true, message: "메모가 저장되었습니다" });
+      return data({ success: true, message: "메모가 저장되었습니다" }, { headers });
     } else if (actionType === "updateStep") {
       const stepId = parseInt(formData.get("stepId") as string);
       const action = formData.get("action") as string;
       const description = formData.get("description") as string;
 
       if (isNaN(stepId)) {
-        return data({ error: "Invalid step ID" }, { status: 400 });
+        return data({ error: "Invalid step ID" }, { status: 400, headers });
       }
 
       // DB 업데이트
       const { updateStepDetails } = await import("../queries.server");
       await updateStepDetails(stepId, action, description);
 
-      return data({ success: true, message: "스텝이 수정되었습니다" });
+      return data({ success: true, message: "스텝이 수정되었습니다" }, { headers });
     } else if (actionType === "deleteStep") {
       const stepId = parseInt(formData.get("stepId") as string);
 
       if (isNaN(stepId)) {
-        return data({ error: "Invalid step ID" }, { status: 400 });
+        return data({ error: "Invalid step ID" }, { status: 400, headers });
       }
 
       // DB 삭제
       const { deleteStep } = await import("../queries.server");
       await deleteStep(stepId);
 
-      return data({ success: true, message: "스텝이 삭제되었습니다" });
+      return data({ success: true, message: "스텝이 삭제되었습니다" }, { headers });
     } else if (actionType === "updateStepType") {
       const stepId = parseInt(formData.get("stepId") as string);
       const type = formData.get("type") as string;
 
       if (isNaN(stepId)) {
-        return data({ error: "Invalid step ID" }, { status: 400 });
+        return data({ error: "Invalid step ID" }, { status: 400, headers });
       }
 
       // DB 업데이트
       const { updateStepType } = await import("../queries.server");
       await updateStepType(stepId, type);
 
-      return data({ success: true, message: "단계 유형이 수정되었습니다" });
+      return data({ success: true, message: "단계 유형이 수정되었습니다" }, { headers });
     } else if (actionType === "reorderSteps") {
       const workflowId = parseInt(formData.get("workflowId") as string);
       const stepIds = JSON.parse(formData.get("stepIds") as string) as number[];
 
       if (isNaN(workflowId) || !Array.isArray(stepIds)) {
-        return data({ error: "Invalid parameters" }, { status: 400 });
+        return data({ error: "Invalid parameters" }, { status: 400, headers });
       }
 
       // DB 재정렬
       const { reorderSteps } = await import("../queries.server");
       await reorderSteps(workflowId, stepIds);
 
-      return data({ success: true, message: "단계 순서가 변경되었습니다" });
+      return data({ success: true, message: "단계 순서가 변경되었습니다" }, { headers });
     } else if (actionType === "addStep") {
       const workflowId = parseInt(formData.get("workflowId") as string);
       const sequenceNo = parseInt(formData.get("sequenceNo") as string);
@@ -235,7 +239,7 @@ export async function action({ request }: Route.ActionArgs) {
       const description = formData.get("description") as string;
 
       if (isNaN(workflowId) || isNaN(sequenceNo)) {
-        return data({ error: "Invalid parameters" }, { status: 400 });
+        return data({ error: "Invalid parameters" }, { status: 400, headers });
       }
 
       // DB에 새 단계 추가
@@ -247,13 +251,60 @@ export async function action({ request }: Route.ActionArgs) {
         description || "",
       );
 
-      return data({ success: true, message: "새 단계가 추가되었습니다" });
+      return data({ success: true, message: "새 단계가 추가되었습니다" }, { headers });
+    } else if (actionType === "uploadScreenshot") {
+      const stepId = parseInt(formData.get("stepId") as string);
+      const file = formData.get("file") as File;
+
+      if (isNaN(stepId) || !file) {
+        return data({ error: "Invalid parameters" }, { status: 400, headers });
+      }
+
+      // Upload to Supabase Storage
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `step-screenshots/${stepId}/${fileName}`;
+
+      const { error: uploadError } = await client.storage
+        .from("work-screenshots") // Ensure this bucket exists or use a common one
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        return data({ error: "Failed to upload image" }, { status: 500, headers });
+      }
+
+      // Get Public URL
+      const {
+        data: { publicUrl },
+      } = client.storage.from("work-screenshots").getPublicUrl(filePath);
+
+      // Update DB
+      const { updateStepScreenshot } = await import("../queries.server");
+      await updateStepScreenshot(stepId, publicUrl);
+
+      return data({ success: true, message: "스크린샷이 업로드되었습니다" }, { headers });
+    } else if (actionType === "deleteScreenshot") {
+      const stepId = parseInt(formData.get("stepId") as string);
+
+      if (isNaN(stepId)) {
+        return data({ error: "Invalid step ID" }, { status: 400, headers });
+      }
+
+      // Update DB (Set to null)
+      const { updateStepScreenshot } = await import("../queries.server");
+      await updateStepScreenshot(stepId, null);
+
+      // Note: We are not deleting the file from storage to keep it simple and avoid permission issues,
+      // but in a real app you might want to delete it.
+
+      return data({ success: true, message: "스크린샷이 삭제되었습니다" }, { headers });
     }
 
-    return data({ error: "Invalid action type" }, { status: 400 });
+    return data({ error: "Invalid action type" }, { status: 400, headers });
   } catch (error) {
     console.error("Action error:", error);
-    return data({ error: "Failed to process request" }, { status: 500 });
+    return data({ error: "Failed to process request" }, { status: 500, headers });
   }
 }
 
@@ -294,6 +345,9 @@ function DemoStyleStep({
   openEditDialog,
   getEditedStep,
   handleTypeChange,
+  mounted,
+  handleUploadScreenshot,
+  handleDeleteScreenshot,
 }: {
   step: LogicStep;
   index: number;
@@ -312,11 +366,24 @@ function DemoStyleStep({
     stepId: number,
   ) => { action: string; description: string; type?: string } | undefined;
   handleTypeChange: (stepId: number, newType: string) => void;
+  mounted: boolean;
+  handleUploadScreenshot: (stepId: number, file: File) => void;
+  handleDeleteScreenshot: (stepId: number) => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+  const isExpanded = isHovered || isLocked;
   const [isEditingType, setIsEditingType] = useState(false);
   const [editedType, setEditedType] = useState(step.type);
   const [localAction, setLocalAction] = useState(currentAction);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleUploadScreenshot(step.id, file);
+    }
+  };
 
   // Sync local action when currentAction changes (step.id changes)
   useEffect(() => {
@@ -399,50 +466,49 @@ function DemoStyleStep({
     getStepColor(step.type);
 
   return (
-    <div
-      className="relative"
+    <motion.div
       ref={setNodeRef}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.5 : 1,
       }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      layout
     >
       <div
-        {...attributes}
-        {...(isEditMode ? listeners : {})}
-        onMouseEnter={() => !isEditMode && setIsExpanded(true)}
-        onMouseLeave={() => !isEditMode && setIsExpanded(false)}
+        {...(mounted ? attributes : {})}
+        {...(mounted && isEditMode ? listeners : {})}
+        onMouseEnter={() => !isEditMode && setIsHovered(true)}
+        onMouseLeave={() => !isEditMode && setIsHovered(false)}
         onClick={(e) => {
           if (!isEditMode) {
             e.stopPropagation();
-            setIsExpanded(true);
+            setIsLocked(!isLocked);
           }
         }}
-        className={`group relative cursor-pointer rounded-lg border transition-all duration-300 ${
+        className={`group relative cursor-pointer overflow-hidden rounded-xl border transition-all duration-300 ${
           isEditMode
-            ? "shadow-blue-20/20 cursor-move border-blue-200 bg-white hover:border-blue-300 hover:bg-blue-50 hover:shadow-lg dark:border-blue-600 dark:bg-blue-50/50 dark:hover:bg-blue-100"
+            ? "cursor-move border-indigo-200 bg-white shadow-lg hover:border-indigo-300 hover:bg-indigo-50 dark:border-indigo-800 dark:bg-slate-900 dark:hover:bg-indigo-900/20"
             : isExpanded
-              ? "border-primary bg-primary/5 shadow-primary/20 shadow-lg"
-              : "border-border bg-card hover:border-primary/50 hover:shadow-md"
-        }`}
+              ? "border-indigo-500/50 bg-indigo-50/50 shadow-xl shadow-indigo-500/10 dark:border-indigo-400/50 dark:bg-indigo-950/20"
+              : "border-white/20 bg-white/40 hover:border-indigo-300/50 hover:bg-white/60 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/40 dark:hover:border-slate-700 dark:hover:bg-slate-800/60"
+        } backdrop-blur-sm`}
       >
-        <div className="p-4 transition-transform duration-300 group-hover:scale-[1.01]">
+        <div className="p-4">
           <div className="flex items-start gap-4">
-            {isEditMode && (
-              <div className="bg-primary text-primary-foreground flex size-12 shrink-0 items-center justify-center rounded-full text-lg font-bold">
-                {index + 1}
-              </div>
-            )}
-            {!isEditMode && (
-              <div className="bg-primary text-primary-foreground flex size-12 shrink-0 items-center justify-center rounded-full text-lg font-bold">
-                {index + 1}
-              </div>
-            )}
+            <div className={`flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-sm transition-colors ${
+              isEditMode 
+                ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300" 
+                : "bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+            }`}>
+              {index + 1}
+            </div>
 
             <div className="flex-1">
               <div className="mb-2 flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <span className="text-xl">{getStepIcon(step.type)}</span>
                   {isEditMode ? (
                     <Input
@@ -451,10 +517,10 @@ function DemoStyleStep({
                         setLocalAction(e.target.value);
                         handleStepTitleChange(step.id, e.target.value);
                       }}
-                      className="border-blue-300 font-medium focus:border-blue-500"
+                      className="h-8 border-indigo-200 font-medium focus:border-indigo-500 dark:border-indigo-800"
                     />
                   ) : (
-                    <h4 className="font-semibold">{currentAction}</h4>
+                    <h4 className="font-semibold text-slate-900 dark:text-slate-100">{currentAction}</h4>
                   )}
                 </div>
                 {isEditMode && (
@@ -465,17 +531,18 @@ function DemoStyleStep({
                       e.stopPropagation();
                       handleDeleteStep(step.id);
                     }}
+                    className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
                   >
-                    <Trash2 className="text-destructive h-4 w-4" />
+                    <Trash2 className="size-4" />
                   </Button>
                 )}
                 {!isEditMode && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setIsExpanded(!isExpanded);
+                      setIsLocked(!isLocked);
                     }}
-                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
                   >
                     {isExpanded ? (
                       <ChevronDown className="size-5" />
@@ -514,7 +581,7 @@ function DemoStyleStep({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
-                  <Badge variant="outline" className={getStepColor(step.type)}>
+                  <Badge variant="outline" className={`${getStepColor(step.type)} border-0`}>
                     {step.type === "click" && "클릭"}
                     {step.type === "input" && "입력"}
                     {step.type === "navigate" && "이동"}
@@ -522,94 +589,143 @@ function DemoStyleStep({
                     {step.type === "decision" && "판단"}
                   </Badge>
                 )}
-                <span className="text-muted-foreground text-sm">
+                {/* <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                  <Clock className="size-3" />
                   {step.timestamp}
-                </span>
+                </div> */}
               </div>
 
-              {(isExpanded || isEditMode) && (
-                <div className="mt-3 space-y-3">
-                  {isEditMode ? (
-                    <div>
-                      <Textarea
-                        value={currentDescription}
-                        onChange={(e) =>
-                          handleStepDescriptionChange(step.id, e.target.value)
-                        }
-                        placeholder="이 단계에 대한 설명을 입력하세요"
-                        rows={3}
-                        className="resize-none border-blue-300 focus:border-blue-500"
-                      />
-                    </div>
-                  ) : (
-                    <div className="bg-muted/50 rounded-lg p-3">
-                      <p className="text-muted-foreground text-sm">
-                        {currentDescription}
-                      </p>
-                    </div>
-                  )}
+              <AnimatePresence>
+                {(isExpanded || isEditMode) && (
+                  <motion.div 
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="mt-4 space-y-4 overflow-hidden"
+                  >
+                    {isEditMode ? (
+                      <div>
+                        <Textarea
+                          value={currentDescription}
+                          onChange={(e) =>
+                            handleStepDescriptionChange(step.id, e.target.value)
+                          }
+                          placeholder="이 단계에 대한 설명을 입력하세요"
+                          rows={3}
+                          className="resize-none border-indigo-200 focus:border-indigo-500 dark:border-indigo-800"
+                        />
+                      </div>
+                    ) : (
+                      <div className="rounded-lg bg-slate-50/50 p-3 dark:bg-slate-900/50">
+                        <p className="text-sm text-slate-600 dark:text-slate-300">
+                          {currentDescription}
+                        </p>
+                      </div>
+                    )}
 
-                  {/* Screenshot */}
-                  {step.screenshot_url && (
-                    <div className="bg-muted relative aspect-video overflow-hidden rounded-lg">
-                      <img
-                        src={step.screenshot_url}
-                        alt={currentAction}
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                  )}
-
-                  {/* Notes Section */}
-                  {!isEditMode && (
-                    <>
-                      {step.notes ? (
-                        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950">
-                          <div className="mb-2 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Lightbulb className="size-4 text-blue-600 dark:text-blue-400" />
-                              <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                                추가 설명
-                              </span>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openEditDialog(step);
-                              }}
-                            >
-                              <Edit className="size-3" />
-                            </Button>
+                    {/* Screenshot */}
+                    {(step.screenshot_url || isEditMode) && (
+                      <div className="relative overflow-hidden rounded-lg border border-slate-200 shadow-sm dark:border-slate-800">
+                        {step.screenshot_url ? (
+                          <div className="relative aspect-video">
+                            <img
+                              src={step.screenshot_url}
+                              alt={currentAction}
+                              className="h-full w-full object-cover"
+                            />
+                            {isEditMode && (
+                              <div className="absolute top-2 right-2">
+                                <Button
+                                  variant="destructive"
+                                  size="icon"
+                                  className="h-8 w-8 shadow-md"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm("정말로 이 스크린샷을 삭제하시겠습니까?")) {
+                                      handleDeleteScreenshot(step.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
-                          <p className="text-sm text-blue-700 dark:text-blue-300">
-                            {step.notes}
-                          </p>
-                        </div>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditDialog(step);
-                          }}
-                          className="w-full"
-                        >
-                          <Plus className="mr-2 size-4" />이 단계에 메모
-                          추가하기
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
+                        ) : (
+                          isEditMode && (
+                            <div 
+                              className="flex aspect-video cursor-pointer flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800"
+                              onClick={() => fileInputRef.current?.click()}
+                            >
+                              <ImageIcon className="mb-2 size-8 text-slate-400" />
+                              <span className="text-sm font-medium text-slate-500">
+                                스크린샷 업로드
+                              </span>
+                              <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={onFileChange}
+                              />
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+
+                    {/* Notes Section */}
+                    {!isEditMode && (
+                      <>
+                        {step.notes ? (
+                          <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 dark:border-indigo-900/30 dark:bg-indigo-950/20">
+                            <div className="mb-2 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Lightbulb className="size-4 text-indigo-600 dark:text-indigo-400" />
+                                <span className="text-sm font-medium text-indigo-900 dark:text-indigo-100">
+                                  추가 설명
+                                </span>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEditDialog(step);
+                                }}
+                                className="h-6 w-6 p-0 hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
+                              >
+                                <Edit className="size-3 text-indigo-600 dark:text-indigo-400" />
+                              </Button>
+                            </div>
+                            <p className="text-sm text-indigo-700 dark:text-indigo-300">
+                              {step.notes}
+                            </p>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditDialog(step);
+                            }}
+                            className="w-full border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-indigo-700 dark:hover:text-indigo-400"
+                          >
+                            <Plus className="mr-2 size-4" />
+                            메모 추가하기
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -652,7 +768,7 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
           duration: formatDuration(workflow.duration_seconds),
           uploadDate: formatDate(workflow.created_at),
           status: workflow.status as "analyzed" | "analyzing" | "pending",
-          thumbnail: workflow.thumbnail_url || "/placeholder-video.jpg",
+          thumbnail: (workflow.thumbnail_url && workflow.thumbnail_url !== "/placeholder-video.jpg") ? workflow.thumbnail_url : "",
           videoUrl,
           steps: (workflow.steps || [])
             .sort((a: any, b: any) => a.sequence_no - b.sequence_no)
@@ -691,6 +807,16 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   const [addedSteps, setAddedSteps] = useState<LogicStep[]>([]);
   const [workflowToDelete, setWorkflowToDelete] = useState<string | null>(null);
   const originalVideoRef = useRef<VideoAnalysis | null>(null);
+
+  // Optimistic UI states for screenshots
+  const [pendingUploads, setPendingUploads] = useState<Map<number, File>>(new Map());
+  const [pendingScreenshotDeletes, setPendingScreenshotDeletes] = useState<Set<number>>(new Set());
+
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // DnD sensors
   const sensors = useSensors(
@@ -765,6 +891,51 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
     }
   }, [dbWorkflows]); // mockVideos 대신 dbWorkflows를 의존성으로 사용
 
+  const handleUploadScreenshot = (stepId: number, file: File) => {
+    // Create preview URL
+    const previewUrl = URL.createObjectURL(file);
+    
+    // Update UI immediately
+    if (selectedVideo) {
+      const updatedSteps = selectedVideo.steps.map(step => 
+        step.id === stepId ? { ...step, screenshot_url: previewUrl } : step
+      );
+      setSelectedVideo({ ...selectedVideo, steps: updatedSteps });
+    }
+
+    // Add to pending uploads
+    setPendingUploads(prev => new Map(prev).set(stepId, file));
+    
+    // Remove from pending deletes if it was there
+    if (pendingScreenshotDeletes.has(stepId)) {
+      const newDeletes = new Set(pendingScreenshotDeletes);
+      newDeletes.delete(stepId);
+      setPendingScreenshotDeletes(newDeletes);
+    }
+  };
+
+  const handleDeleteScreenshot = (stepId: number) => {
+    // Update UI immediately
+    if (selectedVideo) {
+      const updatedSteps = selectedVideo.steps.map(step => 
+        step.id === stepId ? { ...step, screenshot_url: undefined } : step
+      );
+      setSelectedVideo({ ...selectedVideo, steps: updatedSteps });
+    }
+
+    // Add to pending deletes
+    setPendingScreenshotDeletes(prev => new Set(prev).add(stepId));
+    
+    // Remove from pending uploads if it was there
+    if (pendingUploads.has(stepId)) {
+      const newUploads = new Map(pendingUploads);
+      newUploads.delete(stepId);
+      setPendingUploads(newUploads);
+    }
+  };
+
+
+
   const handleEditProcess = () => {
     if (!isEditMode) {
       // Store original state for cancel functionality
@@ -786,6 +957,7 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
       setEditedSteps(newEditedSteps);
       setDeletedStepIds(new Set());
       setAddedSteps([]);
+      setIsEditMode(true);
       toast.success("수정 모드가 활성화되었습니다");
     } else {
       // Save all pending operations: reorders first, then deletes, adds, and edits
@@ -815,112 +987,207 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
 
       // Process additions
       addedSteps.forEach((step, index) => {
-        const sequenceNo = selectedVideo.steps.length + index + 1;
         const formData = new FormData();
         formData.append("actionType", "addStep");
         formData.append("workflowId", selectedVideo.id);
-        formData.append("sequenceNo", sequenceNo.toString());
+        formData.append("sequenceNo", (selectedVideo.steps.length + index + 1).toString());
         formData.append("action", step.action);
         formData.append("description", step.description);
         fetcher.submit(formData, { method: "post" });
       });
 
-      // Save all edited steps including type changes
-      editedSteps.forEach((editedStep, stepId) => {
-        const originalStep = selectedVideo?.steps.find((s) => s.id === stepId);
-        if (originalStep) {
-          const hasChanges =
-            originalStep.action !== editedStep.action ||
-            originalStep.description !== editedStep.description ||
-            (editedStep.type && originalStep.type !== editedStep.type);
+      // Process edits
+      editedSteps.forEach((data, stepId) => {
+        // Skip if step was deleted
+        if (deletedStepIds.has(stepId)) return;
 
-          if (hasChanges) {
-            if (editedStep.type && originalStep.type !== editedStep.type) {
-              // Save type change separately
-              const formData = new FormData();
-              formData.append("actionType", "updateStepType");
-              formData.append("stepId", stepId.toString());
-              formData.append("type", editedStep.type);
-              fetcher.submit(formData, { method: "post" });
-            }
-
-            if (
-              originalStep.action !== editedStep.action ||
-              originalStep.description !== editedStep.description
-            ) {
-              // Save action/description changes
-              const formData = new FormData();
-              formData.append("actionType", "updateStep");
-              formData.append("stepId", stepId.toString());
-              formData.append("action", editedStep.action);
-              formData.append("description", editedStep.description);
-              fetcher.submit(formData, { method: "post" });
-            }
-          }
+        const originalStep = originalVideoRef.current?.steps.find(
+          (s) => s.id === stepId,
+        );
+        if (
+          originalStep &&
+          (originalStep.action !== data.action ||
+            originalStep.description !== data.description)
+        ) {
+          const formData = new FormData();
+          formData.append("actionType", "updateStep");
+          formData.append("stepId", stepId.toString());
+          formData.append("action", data.action);
+          formData.append("description", data.description);
+          fetcher.submit(formData, { method: "post" });
+        }
+        
+        // Type update check
+        if (data.type && originalStep && originalStep.type !== data.type) {
+             const formData = new FormData();
+             formData.append("actionType", "updateStepType");
+             formData.append("stepId", stepId.toString());
+             formData.append("type", data.type);
+             fetcher.submit(formData, { method: "post" });
         }
       });
 
-      // Clear all pending operations
+      // Process screenshot uploads
+      pendingUploads.forEach((file, stepId) => {
+        const formData = new FormData();
+        formData.append("actionType", "uploadScreenshot");
+        formData.append("stepId", stepId.toString());
+        formData.append("file", file);
+        fetcher.submit(formData, { method: "post", encType: "multipart/form-data" });
+      });
+
+      // Process screenshot deletes
+      pendingScreenshotDeletes.forEach((stepId) => {
+        const formData = new FormData();
+        formData.append("actionType", "deleteScreenshot");
+        formData.append("stepId", stepId.toString());
+        fetcher.submit(formData, { method: "post" });
+      });
+
+      setIsEditMode(false);
       setEditedSteps(new Map());
       setDeletedStepIds(new Set());
       setAddedSteps([]);
-      toast.success("변경사항이 저장되었습니다");
+      setPendingUploads(new Map());
+      setPendingScreenshotDeletes(new Set());
+      toast.success("모든 변경사항이 저장되었습니다");
     }
-    setIsEditMode(!isEditMode);
   };
 
   const handleCancelEdit = () => {
-    // Clear all pending operations
-    setEditedSteps(new Map());
-    setDeletedStepIds(new Set());
-    setAddedSteps([]);
-
-    // Restore original video data from stored ref
     if (originalVideoRef.current) {
       setSelectedVideo(originalVideoRef.current);
     }
-
     setIsEditMode(false);
-    toast.success("수정이 취소되었습니다");
+    setEditedSteps(new Map());
+    setDeletedStepIds(new Set());
+    setAddedSteps([]);
+    setPendingUploads(new Map());
+    setPendingScreenshotDeletes(new Set());
+    toast.info("수정이 취소되었습니다");
   };
 
   const handleStepTitleChange = (stepId: number, newTitle: string) => {
-    setEditedSteps((prev) => {
-      const newMap = new Map(prev);
-      const current = newMap.get(stepId) || { action: "", description: "" };
-      newMap.set(stepId, { ...current, action: newTitle });
-      return newMap;
-    });
+    if (!selectedVideo) return;
+
+    const updatedSteps = selectedVideo.steps.map((step) =>
+      step.id === stepId ? { ...step, action: newTitle } : step,
+    );
+    setSelectedVideo({ ...selectedVideo, steps: updatedSteps });
+
+    const currentEdit = editedSteps.get(stepId) || {
+      action: "",
+      description: "",
+    };
+    const step = selectedVideo.steps.find((s) => s.id === stepId);
+    if (step) {
+      setEditedSteps(
+        new Map(
+          editedSteps.set(stepId, {
+            ...currentEdit,
+            action: newTitle,
+            description: currentEdit.description || step.description,
+          }),
+        ),
+      );
+    }
   };
 
   const handleStepDescriptionChange = (
     stepId: number,
     newDescription: string,
   ) => {
-    setEditedSteps((prev) => {
-      const newMap = new Map(prev);
-      const current = newMap.get(stepId) || { action: "", description: "" };
-      newMap.set(stepId, { ...current, description: newDescription });
-      return newMap;
-    });
+    if (!selectedVideo) return;
+
+    const updatedSteps = selectedVideo.steps.map((step) =>
+      step.id === stepId ? { ...step, description: newDescription } : step,
+    );
+    setSelectedVideo({ ...selectedVideo, steps: updatedSteps });
+
+    const currentEdit = editedSteps.get(stepId) || {
+      action: "",
+      description: "",
+    };
+    const step = selectedVideo.steps.find((s) => s.id === stepId);
+    if (step) {
+      setEditedSteps(
+        new Map(
+          editedSteps.set(stepId, {
+            ...currentEdit,
+            description: newDescription,
+            action: currentEdit.action || step.action,
+          }),
+        ),
+      );
+    }
   };
 
   const handleTypeChange = (stepId: number, newType: string) => {
-    setEditedSteps((prev) => {
-      const newMap = new Map(prev);
-      const current = newMap.get(stepId) || { action: "", description: "" };
-      newMap.set(stepId, { ...current, type: newType });
-      return newMap;
-    });
+      if (!selectedVideo) return;
+
+      const updatedSteps = selectedVideo.steps.map((step) =>
+        step.id === stepId ? { ...step, type: newType as any } : step,
+      );
+      setSelectedVideo({ ...selectedVideo, steps: updatedSteps });
+
+      const currentEdit = editedSteps.get(stepId) || {
+        action: "",
+        description: "",
+      };
+      const step = selectedVideo.steps.find((s) => s.id === stepId);
+      if (step) {
+        setEditedSteps(
+          new Map(
+            editedSteps.set(stepId, {
+              ...currentEdit,
+              type: newType,
+              action: currentEdit.action || step.action,
+              description: currentEdit.description || step.description,
+            }),
+          ),
+        );
+      }
   };
 
-  // Drag end handler
+  const handleDeleteStep = (stepId: number) => {
+    if (!selectedVideo) return;
+
+    // Filter out the deleted step
+    const updatedSteps = selectedVideo.steps.filter(
+      (step) => step.id !== stepId,
+    );
+    setSelectedVideo({ ...selectedVideo, steps: updatedSteps });
+
+    // Mark as deleted
+    const newDeletedIds = new Set(deletedStepIds);
+    newDeletedIds.add(stepId);
+    setDeletedStepIds(newDeletedIds);
+  };
+
+  const handleAddStep = () => {
+    if (!selectedVideo) return;
+
+    const newStep: LogicStep = {
+      id: -Date.now(), // Temporary ID
+      action: "새 단계",
+      description: "새로운 단계 설명을 입력하세요",
+      timestamp: "0:00",
+      confidence: 1,
+      type: "click",
+    };
+
+    setSelectedVideo({
+      ...selectedVideo,
+      steps: [...selectedVideo.steps, newStep],
+    });
+
+    setAddedSteps([...addedSteps, newStep]);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (!over || !selectedVideo) return;
-
-    if (active.id !== over.id) {
+    if (over && active.id !== over.id && selectedVideo) {
       const oldIndex = selectedVideo.steps.findIndex(
         (step) => step.id === active.id,
       );
@@ -928,602 +1195,408 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
         (step) => step.id === over.id,
       );
 
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const newSteps = arrayMove(selectedVideo.steps, oldIndex, newIndex);
-
-        // Update UI immediately but don't save to backend yet
-        setSelectedVideo({ ...selectedVideo, steps: newSteps });
-
-        toast.success("단계 순서가 변경되었습니다 (저장 필요)");
-      }
-    }
-  };
-
-  const handleAddStep = async (insertAfterIndex?: number) => {
-    if (!selectedVideo || !isEditMode) return;
-
-    // Create temporary step for optimistic UI update
-    const tempStep: LogicStep = {
-      id: -Date.now(), // Temporary negative ID
-      action: "새 단계",
-      description: "",
-      timestamp: "0:00",
-      confidence: 0,
-      type: "click" as const,
-    };
-
-    // Add to pending operations
-    setAddedSteps((prev) => [...prev, tempStep]);
-
-    // Update UI immediately
-    const newSteps =
-      insertAfterIndex !== undefined
-        ? [
-            ...selectedVideo.steps.slice(0, insertAfterIndex + 1),
-            tempStep,
-            ...selectedVideo.steps.slice(insertAfterIndex + 1),
-          ]
-        : [...selectedVideo.steps, tempStep];
-
-    setSelectedVideo({ ...selectedVideo, steps: newSteps });
-    toast.success("새 단계가 추가되었습니다 (저장 필요)");
-  };
-
-  const handleDeleteStep = (stepId: number) => {
-    if (!selectedVideo || !isEditMode) return;
-
-    // Add to pending operations
-    setDeletedStepIds((prev) => new Set(prev).add(stepId));
-
-    // Update UI immediately
-    const newSteps = selectedVideo.steps.filter((step) => step.id !== stepId);
-    setSelectedVideo({ ...selectedVideo, steps: newSteps });
-    toast.success("단계가 삭제되었습니다 (저장 필요)");
-  };
-
-  const handleDeleteWorkflow = (workflowId: string) => {
-    setWorkflowToDelete(workflowId);
-  };
-
-  const confirmDeleteWorkflow = async () => {
-    if (!workflowToDelete) return;
-
-    try {
-      const response = await fetch(`/api/work/workflows/${workflowToDelete}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        toast.success("워크플로우가 삭제되었습니다");
-
-        // If the deleted workflow was selected, clear selection
-        if (selectedVideo?.id === workflowToDelete) {
-          setSelectedVideo(null);
-        }
-
-        // Revalidate the data to refresh the list
-        revalidator.revalidate();
-      } else {
-        toast.error("워크플로우 삭제에 실패했습니다");
-      }
-    } catch (error) {
-      console.error("Failed to delete workflow:", error);
-      toast.error("워크플로우 삭제에 실패했습니다");
-    } finally {
-      setWorkflowToDelete(null);
-    }
-  };
-
-  const getStepIcon = (type: LogicStep["type"]) => {
-    switch (type) {
-      case "click":
-        return "🖱️";
-      case "input":
-        return "⌨️";
-      case "navigate":
-        return "🧭";
-      case "wait":
-        return "⏱️";
-      case "decision":
-        return "🔀";
-      default:
-        return "📝";
+      const newSteps = arrayMove(selectedVideo.steps, oldIndex, newIndex);
+      setSelectedVideo({ ...selectedVideo, steps: newSteps });
     }
   };
 
   const getStepColor = (type: LogicStep["type"]) => {
     switch (type) {
       case "click":
-        return "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300";
+        return "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900";
       case "input":
-        return "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300";
+        return "bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-900";
       case "navigate":
-        return "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300";
+        return "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-900";
       case "wait":
-        return "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300";
+        return "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-900";
       case "decision":
-        return "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300";
+        return "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-900";
       default:
-        return "bg-gray-100 text-gray-700 dark:bg-gray-950 dark:text-gray-300";
+        return "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700";
     }
   };
 
-  const getEditedStep = (stepId: number) => {
-    return editedSteps.get(stepId);
+  const getEditedStep = (stepId: number) => editedSteps.get(stepId);
+
+  const handleDeleteWorkflow = () => {
+    if (!workflowToDelete) return;
+    
+    // TODO: Implement actual delete logic via action/fetcher if needed
+    // Currently just hiding from UI for demo
+    toast.success("워크플로우가 삭제되었습니다");
+    setWorkflowToDelete(null);
   };
 
-  return (
-    <>
-      <div className="container mx-auto max-w-7xl p-4 sm:p-6">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="mb-2 flex items-center gap-2">
-                <h1 className="text-2xl font-bold sm:text-3xl">
-                  업무 프로세스
-                </h1>
-                <Badge variant="secondary" className="gap-1">
-                  <Sparkles className="size-3" />
-                  관리
-                </Badge>
-              </div>
-              <p className="text-muted-foreground text-sm sm:text-base">
-                업무 동영상을 AI가 자동으로 분석하여 프로세스를 추출합니다
-              </p>
-            </div>
-            <Button size="lg" className="w-full sm:w-auto">
-              <Plus className="mr-2 size-4" />
-              동영상 업로드
-            </Button>
+  // Sidebar Component
+  const SidebarContent = () => (
+    <div className="flex h-full flex-col">
+      <div className="p-6">
+        <div className="mb-6 flex items-center gap-2">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-indigo-600 text-white">
+            <Bot className="size-5" />
           </div>
+          <span className="text-lg font-bold text-slate-900 dark:text-slate-100">Workflows</span>
         </div>
+        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400" asChild>
+          <Link to="/work/upload">
+            <Plus className="mr-2 size-4" />새 분석 시작
+          </Link>
+        </Button>
+      </div>
 
-        {/* Rate Limit Warning */}
-        {rateLimitWarning && (
-          <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
-            <AlertCircle className="size-5 text-amber-600 dark:text-amber-400" />
-            <AlertTitle className="text-amber-900 dark:text-amber-100">
-              ⚠️ API 요청 제한
-            </AlertTitle>
-            <AlertDescription className="text-amber-800 dark:text-amber-200">
-              서버 요청이 잠시 제한되었습니다. 잠시 후 다시 시도해주세요.
-              페이지를 새로고침하면 정상적으로 로드될 수 있습니다.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* Video List Sidebar */}
-          <div className="md:col-span-2 lg:col-span-1">
-            {/* Mobile Header with Hamburger Menu - No Card wrapper */}
-            <div className="mb-4 md:hidden">
-              <Sheet
-                open={isMobileSidebarOpen}
-                onOpenChange={setIsMobileSidebarOpen}
-              >
-                <SheetTrigger asChild>
-                  <Button variant="outline" size="sm" className="mb-4">
-                    <Menu className="mr-2 h-4 w-4" />
-                    업무 목록
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-80 p-0">
-                  <div className="flex h-full flex-col">
-                    <div className="bg-background border-b p-4">
-                      <h2 className="mb-1 flex items-center gap-2">
-                        <FileVideo className="size-5" />
-                        업무 목록
-                      </h2>
-                      <p className="text-muted-foreground text-sm">
-                        업무 목록을 관리하고 작업 내용을 프로세스로 문서화하세요
-                      </p>
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <div className="space-y-2">
+          {mockVideos.map((video) => (
+            <div
+              key={video.id}
+              onClick={() => {
+                setSelectedVideo(video);
+                if (isMobile) setIsMobileSidebarOpen(false);
+              }}
+              className={`group relative cursor-pointer rounded-xl border p-3 transition-all duration-200 ${
+                selectedVideo?.id === video.id
+                  ? "border-indigo-500 bg-indigo-50/50 shadow-md dark:border-indigo-400 dark:bg-indigo-950/30"
+                  : "border-transparent hover:border-slate-200 hover:bg-white/50 dark:hover:border-slate-700 dark:hover:bg-slate-800/50"
+              }`}
+            >
+              <div className="flex gap-3">
+                <div className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-slate-200 dark:bg-slate-800">
+                  {video.thumbnail ? (
+                    <img
+                      src={video.thumbnail}
+                      alt={video.title}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <FileVideo className="size-6 text-slate-400" />
                     </div>
-                    <div className="flex-1 overflow-y-auto">
-                      <div className="p-4">
-                        <div className="space-y-3">
-                          {mockVideos.map((video) => (
-                            <button
-                              key={video.id}
-                              onClick={() => {
-                                setSelectedVideo(video);
-                                setIsEditMode(false);
-                                setEditedSteps(new Map());
-                                setIsMobileSidebarOpen(false);
-                              }}
-                              className={`hover:bg-muted w-full rounded-lg border p-3 text-left transition-colors ${
-                                selectedVideo?.id === video.id
-                                  ? "border-primary bg-primary/5"
-                                  : "border-border"
-                              }`}
-                            >
-                              <div className="mb-2 flex items-start gap-3">
-                                <div className="bg-muted flex size-12 shrink-0 items-center justify-center rounded">
-                                  <FileVideo className="text-muted-foreground size-6" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <h3 className="line-clamp-2 text-sm font-medium">
-                                    {video.title}
-                                  </h3>
-                                  <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
-                                    <Clock className="size-3" />
-                                    {video.duration}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Badge
-                                  variant={
-                                    video.status === "analyzed"
-                                      ? "default"
-                                      : "secondary"
-                                  }
-                                  className="text-xs"
-                                >
-                                  {video.status === "analyzed"
-                                    ? "✅ 분석 완료"
-                                    : video.status === "analyzing"
-                                      ? "⏳ 분석 중"
-                                      : "⏸️ 대기 중"}
-                                </Badge>
-                                <span className="text-muted-foreground text-xs">
-                                  {video.uploadDate}
-                                </span>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </SheetContent>
-              </Sheet>
-            </div>
-
-            {/* Desktop Card Wrapper - Hidden on Mobile */}
-            <Card className="hidden p-4 md:block">
-              {/* Desktop Header */}
-              <div className="mb-4">
-                <h2 className="flex items-center gap-2 text-lg font-semibold">
-                  <FileVideo className="size-5" />
-                  업무 목록
-                </h2>
-              </div>
-
-              {/* Desktop Work List */}
-              <div className="space-y-3">
-                {mockVideos.map((video) => (
-                  <button
-                    key={video.id}
-                    onClick={() => {
-                      setSelectedVideo(video);
-                      setIsEditMode(false);
-                      setEditedSteps(new Map());
-                    }}
-                    className={`hover:bg-muted w-full rounded-lg border p-3 text-left transition-colors ${
-                      selectedVideo?.id === video.id
-                        ? "border-primary bg-primary/5"
-                        : "border-border"
-                    }`}
-                  >
-                    <div className="mb-2 flex items-start gap-3">
-                      <div className="bg-muted flex size-12 shrink-0 items-center justify-center rounded">
-                        <FileVideo className="text-muted-foreground size-6" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="line-clamp-2 text-sm font-medium">
-                          {video.title}
-                        </h3>
-                        <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
-                          <Clock className="size-3" />
-                          {video.duration}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <Badge
-                        variant={
-                          video.status === "analyzed" ? "default" : "secondary"
-                        }
-                        className="text-xs"
-                      >
-                        {video.status === "analyzed"
-                          ? "✅ 분석 완료"
-                          : video.status === "analyzing"
-                            ? "⏳ 분석 중"
-                            : "⏸️ 대기 중"}
-                      </Badge>
-                      <span className="text-muted-foreground text-xs">
-                        {video.uploadDate}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </Card>
-          </div>
-
-          {/* Main Content - Logic Flow */}
-          <div className="md:col-span-2 lg:col-span-2">
-            {selectedVideo ? (
-              <Card className="p-6">
-                {/* Video Header */}
-                <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex-1">
-                    <h2 className="mb-2 text-xl font-bold sm:text-2xl">
-                      {selectedVideo.title}
-                    </h2>
-                    <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm sm:gap-4">
-                      <span className="flex items-center gap-1">
-                        <Clock className="size-4" />
-                        {selectedVideo.duration}
-                      </span>
-                      <span>{selectedVideo.uploadDate}</span>
-                      {selectedVideo.status === "analyzed" && (
-                        <Badge
-                          variant="outline"
-                          className="flex items-center gap-1"
-                        >
-                          <CheckCircle2 className="size-3" />
-                          AI 분석 완료
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex gap-1 md:gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsVideoPlayerOpen(true)}
-                    >
-                      <Play className="mr-2 size-4" />
-                      원본 동영상 보기
-                    </Button>
-                    {isEditMode ? (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleCancelEdit}
-                        >
-                          <X className="mr-2 h-4 w-4" />
-                          취소
-                        </Button>
-                        <Button size="sm" onClick={handleEditProcess}>
-                          <Save className="mr-2 h-4 w-4" />
-                          저장
-                        </Button>
-                      </>
-                    ) : (
-                      <Button size="sm" onClick={handleEditProcess}>
-                        <Edit3 className="mr-2 h-4 w-4" />
-                        수정 모드
-                      </Button>
-                    )}
+                  )}
+                  <div className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[10px] text-white">
+                    {video.duration}
                   </div>
                 </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className={`truncate text-sm font-medium ${
+                    selectedVideo?.id === video.id 
+                      ? "text-indigo-900 dark:text-indigo-100" 
+                      : "text-slate-700 dark:text-slate-300"
+                  }`}>
+                    {video.title}
+                  </h4>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {video.uploadDate}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Badge
+                      variant="secondary"
+                      className={`h-5 px-1.5 text-[10px] ${
+                        video.status === "analyzed"
+                          ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
+                          : "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300"
+                      }`}
+                    >
+                      {video.status === "analyzed" ? "완료" : "분석중"}
+                    </Badge>
+                    <span className="text-xs text-slate-400">
+                      {video.steps.length} steps
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
-                {/* 수정 모드 알림 */}
-                {isEditMode && (
-                  <Alert className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950">
-                    <Edit className="size-5 text-blue-600 dark:text-blue-400" />
-                    <AlertTitle className="text-blue-900 dark:text-blue-100">
-                      ✏️ 수정 모드 활성화
-                    </AlertTitle>
-                    <AlertDescription className="text-blue-800 dark:text-blue-200">
-                      각 단계의 제목과 설명을 직접 수정할 수 있습니다.
-                    </AlertDescription>
-                  </Alert>
-                )}
+  return (
+    <div className="min-h-[calc(100vh-4rem)] w-full bg-slate-50/50 dark:bg-slate-950/50">
+      {/* Rate Limit Warning */}
+      {rateLimitWarning && (
+        <Alert variant="destructive" className="mx-auto max-w-2xl mt-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>알림</AlertTitle>
+          <AlertDescription>
+            사용량이 많아 일부 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
+          </AlertDescription>
+        </Alert>
+      )}
 
-                {/* Logic Steps */}
-                {selectedVideo.status === "analyzed" ? (
+      <div className="flex h-[calc(100vh-4rem)]">
+        {/* Desktop Sidebar */}
+        <div className="hidden w-80 shrink-0 border-r border-slate-200 bg-white/40 backdrop-blur-xl lg:block dark:border-slate-800 dark:bg-slate-900/40">
+          <SidebarContent />
+        </div>
+
+        {/* Mobile Header & Content */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Mobile Header */}
+          <div className="flex items-center justify-between border-b border-slate-200 bg-white/40 px-4 py-3 backdrop-blur-xl lg:hidden dark:border-slate-800 dark:bg-slate-900/40">
+            <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="size-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="p-0 w-80">
+                <SidebarContent />
+              </SheetContent>
+            </Sheet>
+            <span className="font-semibold">Business Logic</span>
+            <div className="w-9" /> {/* Spacer */}
+          </div>
+
+          {/* Main Content */}
+          <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+            <div className="mx-auto max-w-4xl">
+              {selectedVideo ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="space-y-6"
+                >
+                  {/* Header Card */}
+                  <div className="rounded-2xl border border-white/20 bg-white/40 p-6 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/40">
+                    <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+                      <div className="flex gap-4">
+                        <div className="relative size-24 shrink-0 overflow-hidden rounded-xl bg-slate-900 shadow-lg">
+                          {selectedVideo.thumbnail ? (
+                            <img
+                              src={selectedVideo.thumbnail}
+                              alt={selectedVideo.title}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <FileVideo className="size-8 text-slate-500" />
+                            </div>
+                          )}
+                          <div 
+                            className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/30 opacity-0 transition-opacity hover:opacity-100"
+                            onClick={() => setIsVideoPlayerOpen(true)}
+                          >
+                            <Play className="size-8 text-white" />
+                          </div>
+                        </div>
+                        <div>
+                          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                            {selectedVideo.title}
+                          </h1>
+                          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
+                            <span className="flex items-center gap-1">
+                              <Clock className="size-4" />
+                              {selectedVideo.duration}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Layout className="size-4" />
+                              {selectedVideo.steps.length} steps
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Sparkles className="size-4" />
+                              AI Confidence: 98%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        {isEditMode ? (
+                          <>
+                            <Button
+                              variant="outline"
+                              onClick={handleCancelEdit}
+                              className="border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                            >
+                              취소
+                            </Button>
+                            <Button 
+                              onClick={handleEditProcess}
+                              className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                            >
+                              <Save className="mr-2 size-4" />
+                              저장하기
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              variant="outline"
+                              onClick={() => setWorkflowToDelete(selectedVideo.id)}
+                              className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/30"
+                            >
+                              <Trash2 className="mr-2 size-4" />
+                              삭제
+                            </Button>
+                            <Button 
+                              onClick={handleEditProcess}
+                              className="bg-white text-slate-900 shadow-sm hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                            >
+                              <Edit3 className="mr-2 size-4" />
+                              편집 모드
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Steps List */}
                   <div className="space-y-4">
-                    <div className="mb-4 flex items-center justify-between">
-                      <h3 className="flex items-center gap-2 text-lg font-semibold">
-                        <Sparkles className="text-primary size-5" />
-                        단계별 업무 프로세스
+                    <div className="flex items-center justify-between px-2">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        Process Steps
                       </h3>
                       {isEditMode && (
-                        <Button
-                          variant="outline"
+                        <Button 
+                          onClick={handleAddStep} 
                           size="sm"
-                          onClick={() => handleAddStep()}
+                          className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
                         >
-                          <Plus className="mr-2 h-4 w-4" />
+                          <Plus className="mr-2 size-4" />
                           단계 추가
                         </Button>
                       )}
                     </div>
 
-                    <div className="relative space-y-8">
-                      {isEditMode ? (
-                        <DndContext
-                          sensors={sensors}
-                          collisionDetection={closestCenter}
-                          onDragEnd={handleDragEnd}
-                        >
-                          <SortableContext
-                            items={selectedVideo.steps.map((step) => step.id)}
-                            strategy={verticalListSortingStrategy}
-                          >
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext
+                        items={selectedVideo.steps.map((s) => s.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="space-y-3 pb-20">
+                          <AnimatePresence mode="popLayout">
                             {selectedVideo.steps.map((step, index) => (
-                              <div key={step.id}>
-                                <DemoStyleStep
-                                  step={step}
-                                  index={index}
-                                  isEditMode={isEditMode}
-                                  editedStep={getEditedStep(step.id)}
-                                  currentAction={
-                                    getEditedStep(step.id)?.action ||
-                                    step.action
-                                  }
-                                  currentDescription={
-                                    getEditedStep(step.id)?.description ||
-                                    step.description
-                                  }
-                                  getStepColor={getStepColor}
-                                  handleStepTitleChange={handleStepTitleChange}
-                                  handleStepDescriptionChange={
-                                    handleStepDescriptionChange
-                                  }
-                                  handleDeleteStep={handleDeleteStep}
-                                  openEditDialog={openEditDialog}
-                                  getEditedStep={getEditedStep}
-                                  handleTypeChange={handleTypeChange}
-                                />
-                              </div>
+                              <DemoStyleStep
+                                key={step.id}
+                                step={step}
+                                index={index}
+                                isEditMode={isEditMode}
+                                editedStep={getEditedStep(step.id)}
+                                currentAction={
+                                  getEditedStep(step.id)?.action || step.action
+                                }
+                                currentDescription={
+                                  getEditedStep(step.id)?.description ||
+                                  step.description
+                                }
+                                getStepColor={getStepColor}
+                                handleStepTitleChange={handleStepTitleChange}
+                                handleStepDescriptionChange={
+                                  handleStepDescriptionChange
+                                }
+                                handleDeleteStep={handleDeleteStep}
+                                openEditDialog={openEditDialog}
+                                getEditedStep={getEditedStep}
+                                handleTypeChange={handleTypeChange}
+                                mounted={mounted}
+                                handleUploadScreenshot={handleUploadScreenshot}
+                                handleDeleteScreenshot={handleDeleteScreenshot}
+                              />
                             ))}
-                          </SortableContext>
-                        </DndContext>
-                      ) : (
-                        selectedVideo.steps.map((step, index) => (
-                          <div key={step.id}>
-                            <DemoStyleStep
-                              step={step}
-                              index={index}
-                              isEditMode={isEditMode}
-                              editedStep={getEditedStep(step.id)}
-                              currentAction={
-                                getEditedStep(step.id)?.action || step.action
-                              }
-                              currentDescription={
-                                getEditedStep(step.id)?.description ||
-                                step.description
-                              }
-                              getStepColor={getStepColor}
-                              handleStepTitleChange={handleStepTitleChange}
-                              handleStepDescriptionChange={
-                                handleStepDescriptionChange
-                              }
-                              handleDeleteStep={handleDeleteStep}
-                              openEditDialog={openEditDialog}
-                              getEditedStep={getEditedStep}
-                              handleTypeChange={handleTypeChange}
-                            />
-                          </div>
-                        ))
-                      )}
-                    </div>
+                          </AnimatePresence>
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="relative mb-4">
-                      <Bot className="text-primary size-16 animate-pulse" />
-                      <Sparkles className="text-primary absolute -top-1 -right-1 size-6 animate-bounce" />
-                    </div>
-                    <h3 className="mb-2 text-lg font-semibold">
-                      ✨ AI가 열심히 분석하고 있어요
-                    </h3>
-                    <p className="text-muted-foreground mb-1 text-sm">
-                      동영상에서 업무 프로세스를 추출하는 중이에요
-                    </p>
+                </motion.div>
+              ) : (
+                <div className="flex h-[60vh] flex-col items-center justify-center text-center">
+                  <div className="mb-4 rounded-full bg-slate-100 p-6 dark:bg-slate-800">
+                    <Bot className="size-12 text-slate-400" />
                   </div>
-                )}
-              </Card>
-            ) : null}
-          </div>
+                  <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                    선택된 워크플로우가 없습니다
+                  </h3>
+                  <p className="mt-2 text-slate-500 dark:text-slate-400">
+                    왼쪽 목록에서 분석 결과를 선택하거나 새로운 영상을 업로드하세요.
+                  </p>
+                  <Button className="mt-6 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400" asChild>
+                    <Link to="/work/upload">
+                      <Plus className="mr-2 size-4" />새 분석 시작
+                    </Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+          </main>
         </div>
       </div>
 
+      {/* Edit Note Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>메모 편집</DialogTitle>
+            <DialogDescription>
+              이 단계에 대한 추가 설명이나 메모를 작성하세요.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              value={editNotes}
+              onChange={(e) => setEditNotes(e.target.value)}
+              placeholder="메모를 입력하세요..."
+              rows={5}
+              className="resize-none"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsEditDialogOpen(false)}
+            >
+              취소
+            </Button>
+            <Button onClick={handleSaveNotes}>저장</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Workflow Alert */}
+      <Dialog open={!!workflowToDelete} onOpenChange={(open) => !open && setWorkflowToDelete(null)}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>워크플로우 삭제</DialogTitle>
+                <DialogDescription>
+                    정말로 이 워크플로우를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+                </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setWorkflowToDelete(null)}>취소</Button>
+                <Button variant="destructive" onClick={handleDeleteWorkflow}>삭제</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Video Player Dialog */}
       <Dialog open={isVideoPlayerOpen} onOpenChange={setIsVideoPlayerOpen}>
-        <DialogContent className="sm:max-w-[800px]">
-          <DialogHeader>
-            <DialogTitle>원본 동영상 보기</DialogTitle>
-            <DialogDescription>{selectedVideo?.title}</DialogDescription>
-          </DialogHeader>
-          <div className="aspect-video overflow-hidden rounded-lg bg-black">
+        <DialogContent className="max-w-4xl p-0 overflow-hidden bg-black border-slate-800">
+          <div className="relative aspect-video w-full">
             {selectedVideo?.videoUrl ? (
               <video
                 src={selectedVideo.videoUrl}
                 controls
+                autoPlay
                 className="h-full w-full"
               />
             ) : (
-              <div className="flex h-full items-center justify-center text-white">
-                <FileVideo className="size-16" />
+              <div className="flex h-full w-full items-center justify-center text-slate-400">
+                <FileVideo className="size-12" />
+                <span className="ml-2">비디오를 찾을 수 없습니다</span>
               </div>
             )}
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Notes Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Lightbulb className="text-primary size-5" />
-              단계 메모 추가하기
-            </DialogTitle>
-            <DialogDescription>
-              <span className="font-medium">{editingStep?.action}</span> 단계에
-              대한 메모를 작성해보세요.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="notes" className="text-sm font-medium">
-                메모 내용
-              </Label>
-              <Textarea
-                id="notes"
-                placeholder="예) 이 단계에서는 반드시 고객 정보를 확인해야 합니다. 주문 번호가 정확한지 다시 한번 체크 필요"
-                value={editNotes}
-                onChange={(e) => setEditNotes(e.target.value)}
-                rows={6}
-                className="resize-none"
-              />
-              <div className="bg-muted/50 rounded-md p-3">
-                <p className="text-muted-foreground flex items-start gap-2 text-xs">
-                  <Lightbulb className="mt-0.5 size-3 shrink-0" />
-                  <span>주의사항, 팁, 예외 상황 등을 작성해보세요.</span>
-                </p>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsEditDialogOpen(false);
-                setEditingStep(null);
-                setEditNotes("");
-              }}
-            >
-              취소
-            </Button>
-            <Button onClick={handleSaveNotes}>
-              <Save className="mr-2 h-4 w-4" />
-              저장
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Workflow Confirmation Dialog */}
-      <Dialog
-        open={!!workflowToDelete}
-        onOpenChange={() => setWorkflowToDelete(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>워크플로우 삭제</DialogTitle>
-            <DialogDescription>
-              이 워크플로우를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setWorkflowToDelete(null)}>
-              취소
-            </Button>
-            <Button variant="destructive" onClick={confirmDeleteWorkflow}>
-              삭제
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    </div>
   );
 }

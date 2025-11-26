@@ -270,3 +270,16 @@ export async function updateStepType(
     .set({ type: type as "input" | "click" | "wait" | "navigate" | "decision" })
     .where(eq(workAnalysisSteps.step_id, stepId));
 }
+
+/**
+ * Update step screenshot URL
+ */
+export async function updateStepScreenshot(
+  stepId: number,
+  screenshotUrl: string | null,
+): Promise<void> {
+  await db
+    .update(workAnalysisSteps)
+    .set({ screenshot_url: screenshotUrl })
+    .where(eq(workAnalysisSteps.step_id, stepId));
+}

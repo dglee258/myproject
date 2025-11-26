@@ -1,18 +1,22 @@
 import type { Route } from "./+types/upload";
 
+import { AnimatePresence, motion } from "motion/react";
 import {
   CheckCircle2,
   FileVideo,
   Loader2,
   Upload as UploadIcon,
   X,
+  AlertCircle,
+  Film,
+  Sparkles,
+  ArrowRight,
 } from "lucide-react";
 import { useState } from "react";
-import { useLoaderData, useSearchParams } from "react-router";
+import { useLoaderData, useSearchParams, useRevalidator } from "react-router";
 
 import { Button } from "~/core/components/ui/button";
 import { Progress } from "~/core/components/ui/progress";
-import { supabaseBrowser } from "~/core/lib/supa-client.client";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -37,6 +41,7 @@ interface VideoFile {
   error?: string;
   duration_seconds?: number;
   resetTime?: string;
+  resultUrl?: string;
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -66,6 +71,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export default function Upload() {
   const { user, rateLimitStatus } = useLoaderData<typeof loader>();
+  const revalidator = useRevalidator();
   const [searchParams] = useSearchParams();
   const teamId = searchParams.get("teamId");
   const [videoFile, setVideoFile] = useState<VideoFile | null>(null);
@@ -229,15 +235,16 @@ export default function Upload() {
 
       // 4) 진행 상황 폴링
       await pollAnalysisProgress(workflow_id);
-      setVideoFile((prev) =>
-        prev ? { ...prev, status: "completed", progress: 100 } : null,
-      );
-
-      // 5) 결과 페이지로 이동
+      
+      // 5) 결과 URL 생성 및 완료 상태 업데이트 (자동 이동 없음)
       const resultUrl = teamId
         ? `/work/business-logic?workflow=${workflow_id}&teamId=${teamId}`
         : `/work/business-logic?workflow=${workflow_id}`;
-      window.location.href = resultUrl;
+
+      setVideoFile((prev) =>
+        prev ? { ...prev, status: "completed", progress: 100, resultUrl } : null,
+      );
+
     } catch (error: any) {
       console.error("Upload error:", error);
       setVideoFile((prev) =>
@@ -285,383 +292,370 @@ export default function Upload() {
       URL.revokeObjectURL(videoFile.preview);
     }
     setVideoFile(null);
-  };
-
-  const getStatusText = (status: UploadStatus) => {
-    switch (status) {
-      case "uploading":
-        return "업로드 중...";
-      case "processing":
-        return "AI 처리 중...";
-      case "completed":
-        return "처리 완료";
-      case "error":
-        return "오류 발생";
-      case "rate_limited":
-        return "오늘 사용량 초과";
-      default:
-        return "대기 중";
-    }
-  };
-
-  const getStatusColor = (status: UploadStatus) => {
-    switch (status) {
-      case "uploading":
-        return "text-blue-600";
-      case "processing":
-        return "text-purple-600";
-      case "completed":
-        return "text-green-600";
-      case "error":
-        return "text-red-600";
-      case "rate_limited":
-        return "text-orange-600";
-      default:
-        return "text-muted-foreground";
-    }
+    revalidator.revalidate();
   };
 
   return (
-    <div className="container mx-auto max-w-4xl p-6">
-      {/* Rate Limit Warning Banner */}
-      {isRateLimited && rateLimitStatus && (
-        <div className="mb-6 rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-900 dark:bg-orange-950">
-          <div className="flex items-center gap-3">
-            <div className="flex size-5 items-center justify-center rounded-full bg-orange-200 dark:bg-orange-800">
-              <span className="text-xs font-bold text-orange-800 dark:text-orange-200">
-                !
-              </span>
-            </div>
-            <div>
-              <h4 className="font-medium text-orange-900 dark:text-orange-100">
-                오늘 사용량 초과
-              </h4>
-              <p className="text-sm text-orange-700 dark:text-orange-300">
-                일일 비디오 분석 요청 한도를 초과했습니다. 내일 다시
-                시도해주세요.
-                {rateLimitStatus.resetTime && (
-                  <span className="mt-1 block">
-                    재시도 가능 시간:{" "}
-                    {new Date(rateLimitStatus.resetTime).toLocaleString(
-                      "ko-KR",
-                      {
-                        month: "long",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      },
-                    )}
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="mb-2 text-3xl font-bold">동영상 AI 처리</h1>
-        <p className="text-muted-foreground">
-          동영상을 업로드하면 AI가 자동으로 분석하고 처리합니다
-        </p>
-      </div>
-
-      {/* Upload Area */}
-      {!videoFile ? (
-        <div
-          onDragOver={isRateLimited ? undefined : handleDragOver}
-          onDragLeave={isRateLimited ? undefined : handleDragLeave}
-          onDrop={isRateLimited ? undefined : handleDrop}
-          className={`relative rounded-lg border-2 border-dashed p-12 text-center transition-colors ${
-            isRateLimited
-              ? "border-muted-foreground/10 bg-muted/20 cursor-not-allowed opacity-50"
-              : isDragging
-                ? "border-primary bg-primary/5"
-                : "border-muted-foreground/25 hover:border-primary/50"
-          } `}
+    <div className="min-h-[calc(100vh-4rem)] w-full bg-slate-50/50 p-6 dark:bg-slate-950/50">
+      <div className="container mx-auto max-w-5xl">
+        {/* Header Section */}
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-12 text-center"
         >
-          <div className="flex flex-col items-center gap-4">
-            <div className="bg-primary/10 rounded-full p-6">
-              <UploadIcon className="text-primary size-12" />
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-xl font-semibold">
-                {isRateLimited
-                  ? "오늘 사용량이 모두 소진되었습니다"
-                  : "동영상 파일을 드래그하거나 선택하세요"}
-              </h3>
-              <p className="text-muted-foreground text-sm">
-                {isRateLimited
-                  ? "내일 다시 시도해주세요"
-                  : "MP4, MOV, AVI, WebM 등 지원 (최대 50MB)"}
-              </p>
-              {rateLimitStatus && (
-                <p className="text-muted-foreground text-xs">
-                  오늘 사용량: {rateLimitStatus.currentCount}/
-                  {rateLimitStatus.maxDailyRequests}
-                  {rateLimitStatus.remainingRequests > 0 &&
-                    ` (남은 횟수: ${rateLimitStatus.remainingRequests})`}
-                </p>
-              )}
-            </div>
-
-            {!isRateLimited ? (
-              <label htmlFor="file-upload" className="cursor-pointer">
-                <Button type="button" asChild>
-                  <span>파일 선택</span>
-                </Button>
-              </label>
-            ) : (
-              <Button type="button" disabled className="cursor-not-allowed">
-                <span>사용량 초과</span>
-              </Button>
-            )}
-            <input
-              id="file-upload"
-              type="file"
-              accept="video/*"
-              onChange={isRateLimited ? undefined : handleFileSelect}
-              className="hidden"
-              disabled={isRateLimited}
-            />
+          <div className="mb-4 inline-flex items-center justify-center rounded-full bg-indigo-100 p-3 dark:bg-indigo-900/30">
+            <Sparkles className="size-6 text-indigo-600 dark:text-indigo-400" />
           </div>
-        </div>
-      ) : (
-        /* Video Preview & Processing */
-        <div className="space-y-6">
-          {/* Video Card */}
-          <div className="bg-card rounded-lg border p-6">
-            <div className="flex items-start gap-4">
-              {/* Video Preview */}
-              <div className="bg-muted relative size-32 shrink-0 overflow-hidden rounded-lg">
-                <video
-                  src={videoFile.preview}
-                  className="size-full object-cover"
-                  muted
-                />
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                  <FileVideo className="size-8 text-white" />
-                </div>
-              </div>
+          <h1 className="mb-3 text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+            AI Video Analysis
+          </h1>
+          <p className="mx-auto max-w-2xl text-lg text-slate-600 dark:text-slate-400">
+            동영상을 업로드하면 AI가 업무 프로세스를 자동으로 분석합니다.
+            <br className="hidden sm:block" />
+            빠르고 정확한 자동화 분석을 경험해보세요.
+          </p>
+        </motion.div>
 
-              {/* File Info */}
-              <div className="flex-1 space-y-3">
-                <div className="flex items-start justify-between">
+        {/* Rate Limit Warning */}
+        <AnimatePresence>
+          {isRateLimited && rateLimitStatus && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-8 overflow-hidden"
+            >
+              <div className="rounded-2xl border border-orange-200 bg-orange-50/80 p-6 backdrop-blur-sm dark:border-orange-900/50 dark:bg-orange-950/30">
+                <div className="flex items-start gap-4">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/50">
+                    <AlertCircle className="size-5 text-orange-600 dark:text-orange-400" />
+                  </div>
                   <div>
-                    <h3 className="font-semibold">{videoFile.file.name}</h3>
-                    <p className="text-muted-foreground text-sm">
-                      {(videoFile.file.size / (1024 * 1024)).toFixed(2)} MB
+                    <h4 className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                      일일 사용량 초과 (Daily Limit Reached)
+                    </h4>
+                    <p className="mt-1 text-orange-700 dark:text-orange-300">
+                      오늘의 무료 분석 횟수를 모두 사용했습니다. 내일 다시 시도해주세요.
+                      {rateLimitStatus.resetTime && (
+                        <span className="mt-2 block font-medium">
+                          초기화 시간:{" "}
+                          {new Date(rateLimitStatus.resetTime).toLocaleString("ko-KR", {
+                            month: "long",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      )}
                     </p>
                   </div>
-                  {videoFile.status !== "uploading" &&
-                    videoFile.status !== "processing" && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={handleRemove}
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    )}
                 </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-                {/* Status */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className={getStatusColor(videoFile.status)}>
-                      {getStatusText(videoFile.status)}
-                    </span>
-                    {(videoFile.status === "uploading" ||
-                      videoFile.status === "processing") && (
-                      <span className="text-muted-foreground">
-                        {videoFile.progress}%
-                      </span>
+        {/* Main Content Area */}
+        <div className="grid gap-8 lg:grid-cols-1">
+          <AnimatePresence mode="wait">
+            {!videoFile ? (
+              <motion.div
+                key="upload-zone"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div
+                  onDragOver={isRateLimited ? undefined : handleDragOver}
+                  onDragLeave={isRateLimited ? undefined : handleDragLeave}
+                  onDrop={isRateLimited ? undefined : handleDrop}
+                  className={`group relative overflow-hidden rounded-3xl border-2 border-dashed transition-all duration-500 ${
+                    isRateLimited
+                      ? "cursor-not-allowed border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50"
+                      : isDragging
+                        ? "border-indigo-500 bg-indigo-50/50 scale-[1.02] shadow-2xl shadow-indigo-500/10 dark:border-indigo-400 dark:bg-indigo-950/20"
+                        : "border-slate-300 bg-white/50 hover:border-indigo-400 hover:bg-slate-50/80 dark:border-slate-700 dark:bg-slate-900/50 dark:hover:border-indigo-500/50 dark:hover:bg-slate-800/50"
+                  }`}
+                >
+                  <div className="flex min-h-[400px] flex-col items-center justify-center p-12 text-center">
+                    <div className="relative mb-8">
+                      <div className={`absolute inset-0 animate-ping rounded-full bg-indigo-400/20 duration-1000 ${isDragging ? 'opacity-100' : 'opacity-0'}`} />
+                      <div className={`flex size-24 items-center justify-center rounded-full transition-all duration-300 ${
+                        isDragging 
+                          ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300" 
+                          : "bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500 dark:bg-slate-800 dark:text-slate-500 dark:group-hover:bg-indigo-900/30 dark:group-hover:text-indigo-400"
+                      }`}>
+                        <UploadIcon className="size-10" />
+                      </div>
+                    </div>
+
+                    <h3 className="mb-3 text-2xl font-bold text-slate-900 dark:text-slate-100">
+                      {isRateLimited ? "사용량 초과" : "동영상 파일을 올려주세요"}
+                    </h3>
+                    <p className="mb-8 max-w-md text-slate-500 dark:text-slate-400">
+                      {isRateLimited
+                        ? "오늘 사용 가능한 분석 횟수를 모두 소진했습니다."
+                        : "MP4, MOV, AVI, WebM 지원. 최대 파일 크기 50MB."}
+                    </p>
+
+                    {!isRateLimited && (
+                      <div className="flex flex-col items-center gap-4">
+                        <label htmlFor="file-upload" className="relative z-10">
+                          <Button 
+                            size="lg" 
+                            className="h-12 rounded-full bg-indigo-600 px-8 text-base font-medium hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                            asChild
+                          >
+                            <span className="cursor-pointer">파일 선택 (Select File)</span>
+                          </Button>
+                          <input
+                            id="file-upload"
+                            type="file"
+                            accept="video/*"
+                            onChange={handleFileSelect}
+                            className="hidden"
+                          />
+                        </label>
+                        {rateLimitStatus && (
+                          <p className="text-xs font-medium text-slate-400">
+                            오늘 사용량: {rateLimitStatus.currentCount}/{rateLimitStatus.maxDailyRequests}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
-
-                  {/* Progress Bar */}
-                  {(videoFile.status === "uploading" ||
-                    videoFile.status === "processing") && (
-                    <Progress value={videoFile.progress} className="h-2" />
-                  )}
                 </div>
-
-                {/* Processing Steps */}
-                {(videoFile.status === "processing" ||
-                  videoFile.status === "completed") && (
-                  <div className="bg-muted/50 space-y-2 rounded-lg p-4">
-                    <h4 className="text-sm font-medium">AI 처리 단계</h4>
-                    <div className="space-y-2">
-                      <ProcessingStep
-                        label="동영상 분석"
-                        completed={videoFile.progress > 30}
-                        active={
-                          videoFile.status === "processing" &&
-                          videoFile.progress <= 30
-                        }
+              </motion.div>
+            ) : (
+              <motion.div
+                key="processing-zone"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="overflow-hidden rounded-3xl border border-white/20 bg-white/40 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/40"
+              >
+                <div className="grid gap-0 lg:grid-cols-2">
+                  {/* Left: Video Preview */}
+                  <div className="relative flex flex-col justify-center bg-slate-900 p-8 lg:p-12">
+                    <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+                      <video
+                        src={videoFile.preview}
+                        className="size-full object-contain"
+                        controls={false}
+                        muted
                       />
-                      <ProcessingStep
-                        label="객체 인식"
-                        completed={videoFile.progress > 60}
-                        active={
-                          videoFile.status === "processing" &&
-                          videoFile.progress > 30 &&
-                          videoFile.progress <= 60
-                        }
-                      />
-                      <ProcessingStep
-                        label="최적화 및 변환"
-                        completed={videoFile.status === "completed"}
-                        active={
-                          videoFile.status === "processing" &&
-                          videoFile.progress > 60
-                        }
-                      />
+                      {/* Overlay Gradient */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
+                      
+                      {/* File Info Overlay */}
+                      <div className="absolute bottom-0 left-0 w-full p-6">
+                        <div className="flex items-center gap-3">
+                          <div className="flex size-10 items-center justify-center rounded-lg bg-white/10 backdrop-blur-md">
+                            <Film className="size-5 text-white" />
+                          </div>
+                          <div className="flex-1 overflow-hidden">
+                            <h3 className="truncate text-lg font-medium text-white">
+                              {videoFile.file.name}
+                            </h3>
+                            <p className="text-sm text-slate-300">
+                              {(videoFile.file.size / (1024 * 1024)).toFixed(2)} MB
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3">
-            {videoFile.status === "idle" && (
-              <>
-                <Button onClick={handleUpload} size="lg" className="flex-1">
-                  <UploadIcon className="mr-2 size-4" />
-                  업로드 및 AI 처리 시작
-                </Button>
-                <Button variant="outline" size="lg" onClick={handleRemove}>
-                  취소
-                </Button>
-              </>
-            )}
+                  {/* Right: Controls & Progress */}
+                  <div className="flex flex-col p-8 lg:p-12">
+                    <div className="mb-8 flex items-center justify-between">
+                      <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                        처리 상태 (Processing Status)
+                      </h2>
+                      {videoFile.status !== "uploading" && videoFile.status !== "processing" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={handleRemove}
+                          className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                        >
+                          <X className="size-5" />
+                        </Button>
+                      )}
+                    </div>
 
-            {videoFile.status === "completed" && (
-              <>
-                <Button size="lg" className="flex-1">
-                  결과 확인
-                </Button>
-                <Button variant="outline" size="lg" onClick={handleRemove}>
-                  새로운 파일 업로드
-                </Button>
-              </>
-            )}
+                    <div className="flex-1">
+                      <div className="space-y-8">
+                        {/* Status Steps */}
+                        <div className="space-y-6">
+                          <StatusStep 
+                            status={videoFile.status}
+                            step="uploading"
+                            label="동영상 업로드"
+                            description="서버로 파일을 안전하게 전송합니다"
+                            active={videoFile.status === "uploading"}
+                            completed={["processing", "completed"].includes(videoFile.status)}
+                          />
+                          <StatusStep 
+                            status={videoFile.status}
+                            step="processing"
+                            label="AI 심층 분석"
+                            description="객체 인식 및 워크플로우 분석 중"
+                            active={videoFile.status === "processing"}
+                            completed={videoFile.status === "completed"}
+                          />
+                          <StatusStep 
+                            status={videoFile.status}
+                            step="completed"
+                            label="결과 생성 완료"
+                            description="분석이 완료되었습니다"
+                            active={false}
+                            completed={videoFile.status === "completed"}
+                          />
+                        </div>
 
-            {videoFile.status === "rate_limited" && (
-              <Button variant="outline" size="lg" onClick={handleRemove}>
-                새로운 파일 업로드
-              </Button>
-            )}
-          </div>
+                        {/* Progress Bar */}
+                        {(videoFile.status === "uploading" || videoFile.status === "processing") && (
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-sm font-medium">
+                              <span className="text-indigo-600 dark:text-indigo-400">
+                                {videoFile.status === "uploading" ? "업로드 중..." : "분석 중..."}
+                              </span>
+                              <span className="text-slate-500">{videoFile.progress}%</span>
+                            </div>
+                            <Progress value={videoFile.progress} className="h-2 bg-slate-100 dark:bg-slate-800" />
+                          </div>
+                        )}
 
-          {/* Success Message */}
-          {videoFile.status === "completed" && (
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950">
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="size-5 text-green-600 dark:text-green-400" />
-                <div>
-                  <h4 className="font-medium text-green-900 dark:text-green-100">
-                    처리 완료!
-                  </h4>
-                  <p className="text-sm text-green-700 dark:text-green-300">
-                    동영상이 성공적으로 처리되었습니다. 결과를 확인하세요.
-                  </p>
+                        {/* Error Message */}
+                        {videoFile.status === "error" && (
+                          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
+                            <div className="flex items-center gap-2 font-medium">
+                              <AlertCircle className="size-4" />
+                              업로드 실패
+                            </div>
+                            <p className="mt-1 text-sm opacity-90">{videoFile.error}</p>
+                          </div>
+                        )}
+
+                        {/* Rate Limit Message */}
+                        {videoFile.status === "rate_limited" && (
+                          <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-orange-700 dark:border-orange-900/50 dark:bg-orange-950/30 dark:text-orange-400">
+                            <div className="flex items-center gap-2 font-medium">
+                              <AlertCircle className="size-4" />
+                              사용량 초과
+                            </div>
+                            <p className="mt-1 text-sm opacity-90">{videoFile.error}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
+                      {videoFile.status === "idle" && (
+                        <div className="flex gap-3">
+                          <Button 
+                            onClick={handleUpload} 
+                            size="lg" 
+                            className="flex-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                          >
+                            분석 시작 (Start Analysis)
+                            <ArrowRight className="ml-2 size-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="lg" 
+                            onClick={handleRemove}
+                            className="rounded-xl border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                          >
+                            취소
+                          </Button>
+                        </div>
+                      )}
+
+                      {videoFile.status === "completed" && (
+                        <Button 
+                          size="lg" 
+                          onClick={() => {
+                            if (videoFile.resultUrl) {
+                              window.location.href = videoFile.resultUrl;
+                            }
+                          }}
+                          className="w-full rounded-xl bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-400"
+                        >
+                          결과 확인하기 (View Results)
+                          <ArrowRight className="ml-2 size-4" />
+                        </Button>
+                      )}
+                      
+                      {(videoFile.status === "error" || videoFile.status === "rate_limited") && (
+                        <Button 
+                          variant="outline"
+                          size="lg" 
+                          onClick={handleRemove}
+                          className="w-full rounded-xl"
+                        >
+                          다른 파일 업로드
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-          {/* Rate Limit Message */}
-          {videoFile.status === "rate_limited" && (
-            <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-900 dark:bg-orange-950">
-              <div className="flex items-center gap-3">
-                <div className="flex size-5 items-center justify-center rounded-full bg-orange-200 dark:bg-orange-800">
-                  <span className="text-xs font-bold text-orange-800 dark:text-orange-200">
-                    !
-                  </span>
-                </div>
-                <div>
-                  <h4 className="font-medium text-orange-900 dark:text-orange-100">
-                    오늘 사용량 초과
-                  </h4>
-                  <p className="text-sm text-orange-700 dark:text-orange-300">
-                    {videoFile.error}
-                    {videoFile.resetTime && (
-                      <span className="mt-1 block">
-                        재시도 가능 시간:{" "}
-                        {new Date(videoFile.resetTime).toLocaleString("ko-KR", {
-                          month: "long",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
+function StatusStep({ 
+  status, 
+  step, 
+  label, 
+  description, 
+  active, 
+  completed 
+}: { 
+  status: UploadStatus;
+  step: string;
+  label: string;
+  description: string;
+  active: boolean;
+  completed: boolean;
+}) {
+  return (
+    <div className="flex gap-4">
+      <div className="relative flex flex-col items-center">
+        <div className={`flex size-8 items-center justify-center rounded-full border-2 transition-colors duration-300 ${
+          completed 
+            ? "border-indigo-600 bg-indigo-600 text-white dark:border-indigo-500 dark:bg-indigo-500" 
+            : active 
+              ? "border-indigo-600 bg-white text-indigo-600 dark:border-indigo-500 dark:bg-slate-900 dark:text-indigo-500"
+              : "border-slate-200 bg-slate-50 text-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600"
+        }`}>
+          {completed ? (
+            <CheckCircle2 className="size-5" />
+          ) : active ? (
+            <Loader2 className="size-5 animate-spin" />
+          ) : (
+            <div className="size-2 rounded-full bg-current" />
           )}
         </div>
-      )}
-
-      {/* Info Cards */}
-      {/*  */}
-    </div>
-  );
-}
-
-function ProcessingStep({
-  label,
-  completed,
-  active,
-}: {
-  label: string;
-  completed: boolean;
-  active: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      {completed ? (
-        <CheckCircle2 className="size-4 text-green-600" />
-      ) : active ? (
-        <Loader2 className="size-4 animate-spin text-purple-600" />
-      ) : (
-        <div className="border-muted-foreground/30 size-4 rounded-full border-2" />
-      )}
-      <span
-        className={`text-sm ${
-          completed
-            ? "text-green-600"
-            : active
-              ? "font-medium text-purple-600"
-              : "text-muted-foreground"
-        }`}
-      >
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function InfoCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="bg-card rounded-lg border p-4">
-      <div className="text-primary mb-2">{icon}</div>
-      <h3 className="mb-1 font-semibold">{title}</h3>
-      <p className="text-muted-foreground text-sm">{description}</p>
+        {step !== "completed" && (
+          <div className={`h-full w-0.5 my-2 ${
+            completed ? "bg-indigo-600 dark:bg-indigo-500" : "bg-slate-200 dark:bg-slate-800"
+          }`} />
+        )}
+      </div>
+      <div className={`pb-6 ${active || completed ? "opacity-100" : "opacity-50"}`}>
+        <h4 className="font-semibold text-slate-900 dark:text-slate-100">{label}</h4>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{description}</p>
+      </div>
     </div>
   );
 }
