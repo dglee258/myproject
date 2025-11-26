@@ -1,19 +1,21 @@
 /**
  * Video Analysis API
- * 
+ *
  * POST /api/work/analyze
  * - 워크플로우 생성 및 AI 분석 시작
  */
-
 import type { Route } from "./+types/analyze";
+
+import { and, eq, isNull, sql } from "drizzle-orm";
+
 import db from "~/core/db/drizzle-client.server";
-import { workVideos } from "~/features/work/upload/schema";
+import makeServerClient from "~/core/lib/supa-client.server";
 import { workWorkflows } from "~/features/work/business-logic/schema";
+import { requireVideoAnalysisRateLimit } from "~/features/work/rate-limiting/rate-limit.guard";
+import { analyzeVideoInBackground } from "~/features/work/services/video-analyzer.server";
 import { workWorkflowMembers } from "~/features/work/team-management/schema";
 import { workTeamMembers } from "~/features/work/team-management/team-schema";
-import { eq, isNull, and, sql } from "drizzle-orm";
-import makeServerClient from "~/core/lib/supa-client.server";
-import { analyzeVideoInBackground } from "~/features/work/services/video-analyzer.server";
+import { workVideos } from "~/features/work/upload/schema";
 
 export async function action({ request }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -29,8 +31,21 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ error: "Unauthorized" }, { status: 401, headers });
   }
 
+  // 비디오 분석 요청 제한 확인 (인증 직후 실행)
+  console.log("Starting rate limit check for user:", user.id);
   try {
-    const { video_id } = await request.json();
+    await requireVideoAnalysisRateLimit(supabase);
+    console.log("Rate limit check passed");
+  } catch (error) {
+    console.error("Rate limit check failed:", error);
+    // React Router의 data() 함수가 반환한 에러는 자동으로 응답으로 처리됨
+    throw error;
+  }
+
+  try {
+    const requestBody = await request.json();
+    console.log("Analyze request body:", requestBody);
+    const { video_id } = requestBody;
 
     // 비디오 조회
     const video = await db.query.workVideos.findFirst({
@@ -38,7 +53,10 @@ export async function action({ request }: Route.ActionArgs) {
     });
 
     if (!video) {
-      return Response.json({ error: "Video not found" }, { status: 404, headers });
+      return Response.json(
+        { error: "Video not found" },
+        { status: 404, headers },
+      );
     }
 
     if (video.owner_id !== user.id) {
@@ -62,7 +80,7 @@ export async function action({ request }: Route.ActionArgs) {
         // 우선순위: owner > admin > member
         sql`CASE WHEN ${workTeamMembers.role} = 'owner' THEN 1 
               WHEN ${workTeamMembers.role} = 'admin' THEN 2 
-              ELSE 3 END`
+              ELSE 3 END`,
       )
       .limit(1);
 

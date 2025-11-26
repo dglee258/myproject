@@ -50,6 +50,13 @@
       "when": 1763619957961,
       "tag": "0006_brief_triathlon",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1764076573393,
+      "tag": "0007_petite_taskmaster",
+      "breakpoints": true
     }
   ]
 }

@@ -21,7 +21,13 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-type UploadStatus = "idle" | "uploading" | "processing" | "completed" | "error";
+type UploadStatus =
+  | "idle"
+  | "uploading"
+  | "processing"
+  | "completed"
+  | "error"
+  | "rate_limited";
 
 interface VideoFile {
   file: File;
@@ -30,6 +36,7 @@ interface VideoFile {
   progress: number;
   error?: string;
   duration_seconds?: number;
+  resetTime?: string;
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -41,17 +48,31 @@ export async function loader({ request }: Route.LoaderArgs) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return { user: null };
+    return { user: null, rateLimitStatus: null };
   }
-  return { user };
+
+  // Rate Limit 상태 체크
+  try {
+    const { checkVideoAnalysisRateLimitStatus } = await import(
+      "~/features/work/rate-limiting/rate-limit.guard"
+    );
+    const rateLimitStatus = await checkVideoAnalysisRateLimitStatus(supabase);
+    return { user, rateLimitStatus };
+  } catch (error) {
+    console.error("Rate limit check failed:", error);
+    return { user, rateLimitStatus: null };
+  }
 }
 
 export default function Upload() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user, rateLimitStatus } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const teamId = searchParams.get("teamId");
   const [videoFile, setVideoFile] = useState<VideoFile | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Rate Limit 상태 확인
+  const isRateLimited = rateLimitStatus?.isLimitExceeded === true;
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -183,6 +204,25 @@ export default function Upload() {
       });
       if (!analyzeRes.ok) {
         const j = await analyzeRes.json().catch(() => ({}));
+
+        // Rate Limit 에러 처리 (429)
+        if (analyzeRes.status === 429) {
+          const rateLimitError = new Error(
+            j.error || "일일 분석 요청 한도를 초과했습니다",
+          );
+          setVideoFile((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: "rate_limited",
+                  error: rateLimitError.message,
+                  resetTime: j.resetTime,
+                }
+              : null,
+          );
+          return; // 여기서 처리 중단
+        }
+
         throw new Error(j.error || `분석 시작 실패(${analyzeRes.status})`);
       }
       const { workflow_id } = await analyzeRes.json();
@@ -257,6 +297,8 @@ export default function Upload() {
         return "처리 완료";
       case "error":
         return "오류 발생";
+      case "rate_limited":
+        return "오늘 사용량 초과";
       default:
         return "대기 중";
     }
@@ -272,6 +314,8 @@ export default function Upload() {
         return "text-green-600";
       case "error":
         return "text-red-600";
+      case "rate_limited":
+        return "text-orange-600";
       default:
         return "text-muted-foreground";
     }
@@ -279,6 +323,42 @@ export default function Upload() {
 
   return (
     <div className="container mx-auto max-w-4xl p-6">
+      {/* Rate Limit Warning Banner */}
+      {isRateLimited && rateLimitStatus && (
+        <div className="mb-6 rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-900 dark:bg-orange-950">
+          <div className="flex items-center gap-3">
+            <div className="flex size-5 items-center justify-center rounded-full bg-orange-200 dark:bg-orange-800">
+              <span className="text-xs font-bold text-orange-800 dark:text-orange-200">
+                !
+              </span>
+            </div>
+            <div>
+              <h4 className="font-medium text-orange-900 dark:text-orange-100">
+                오늘 사용량 초과
+              </h4>
+              <p className="text-sm text-orange-700 dark:text-orange-300">
+                일일 비디오 분석 요청 한도를 초과했습니다. 내일 다시
+                시도해주세요.
+                {rateLimitStatus.resetTime && (
+                  <span className="mt-1 block">
+                    재시도 가능 시간:{" "}
+                    {new Date(rateLimitStatus.resetTime).toLocaleString(
+                      "ko-KR",
+                      {
+                        month: "long",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      },
+                    )}
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <h1 className="mb-2 text-3xl font-bold">동영상 AI 처리</h1>
@@ -290,13 +370,15 @@ export default function Upload() {
       {/* Upload Area */}
       {!videoFile ? (
         <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+          onDragOver={isRateLimited ? undefined : handleDragOver}
+          onDragLeave={isRateLimited ? undefined : handleDragLeave}
+          onDrop={isRateLimited ? undefined : handleDrop}
           className={`relative rounded-lg border-2 border-dashed p-12 text-center transition-colors ${
-            isDragging
-              ? "border-primary bg-primary/5"
-              : "border-muted-foreground/25 hover:border-primary/50"
+            isRateLimited
+              ? "border-muted-foreground/10 bg-muted/20 cursor-not-allowed opacity-50"
+              : isDragging
+                ? "border-primary bg-primary/5"
+                : "border-muted-foreground/25 hover:border-primary/50"
           } `}
         >
           <div className="flex flex-col items-center gap-4">
@@ -306,24 +388,43 @@ export default function Upload() {
 
             <div className="space-y-2">
               <h3 className="text-xl font-semibold">
-                동영상 파일을 드래그하거나 선택하세요
+                {isRateLimited
+                  ? "오늘 사용량이 모두 소진되었습니다"
+                  : "동영상 파일을 드래그하거나 선택하세요"}
               </h3>
               <p className="text-muted-foreground text-sm">
-                MP4, MOV, AVI, WebM 등 지원 (최대 50MB)
+                {isRateLimited
+                  ? "내일 다시 시도해주세요"
+                  : "MP4, MOV, AVI, WebM 등 지원 (최대 50MB)"}
               </p>
+              {rateLimitStatus && (
+                <p className="text-muted-foreground text-xs">
+                  오늘 사용량: {rateLimitStatus.currentCount}/
+                  {rateLimitStatus.maxDailyRequests}
+                  {rateLimitStatus.remainingRequests > 0 &&
+                    ` (남은 횟수: ${rateLimitStatus.remainingRequests})`}
+                </p>
+              )}
             </div>
 
-            <label htmlFor="file-upload" className="cursor-pointer">
-              <Button type="button" asChild>
-                <span>파일 선택</span>
+            {!isRateLimited ? (
+              <label htmlFor="file-upload" className="cursor-pointer">
+                <Button type="button" asChild>
+                  <span>파일 선택</span>
+                </Button>
+              </label>
+            ) : (
+              <Button type="button" disabled className="cursor-not-allowed">
+                <span>사용량 초과</span>
               </Button>
-            </label>
+            )}
             <input
               id="file-upload"
               type="file"
               accept="video/*"
-              onChange={handleFileSelect}
+              onChange={isRateLimited ? undefined : handleFileSelect}
               className="hidden"
+              disabled={isRateLimited}
             />
           </div>
         </div>
@@ -449,6 +550,12 @@ export default function Upload() {
                 </Button>
               </>
             )}
+
+            {videoFile.status === "rate_limited" && (
+              <Button variant="outline" size="lg" onClick={handleRemove}>
+                새로운 파일 업로드
+              </Button>
+            )}
           </div>
 
           {/* Success Message */}
@@ -462,6 +569,38 @@ export default function Upload() {
                   </h4>
                   <p className="text-sm text-green-700 dark:text-green-300">
                     동영상이 성공적으로 처리되었습니다. 결과를 확인하세요.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Rate Limit Message */}
+          {videoFile.status === "rate_limited" && (
+            <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-900 dark:bg-orange-950">
+              <div className="flex items-center gap-3">
+                <div className="flex size-5 items-center justify-center rounded-full bg-orange-200 dark:bg-orange-800">
+                  <span className="text-xs font-bold text-orange-800 dark:text-orange-200">
+                    !
+                  </span>
+                </div>
+                <div>
+                  <h4 className="font-medium text-orange-900 dark:text-orange-100">
+                    오늘 사용량 초과
+                  </h4>
+                  <p className="text-sm text-orange-700 dark:text-orange-300">
+                    {videoFile.error}
+                    {videoFile.resetTime && (
+                      <span className="mt-1 block">
+                        재시도 가능 시간:{" "}
+                        {new Date(videoFile.resetTime).toLocaleString("ko-KR", {
+                          month: "long",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>

@@ -175,8 +175,8 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
 
   const filteredMembers = members.filter((member) => {
     const matchesSearch = member.email
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
+      ? member.email.toLowerCase().includes(searchQuery.toLowerCase())
+      : false;
     const matchesStatus =
       filterStatus === "all" || member.status === filterStatus;
     return matchesSearch && matchesStatus;

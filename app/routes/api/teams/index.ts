@@ -1,10 +1,14 @@
-import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { data } from "react-router";
-import { eq, desc, and, or, exists } from "drizzle-orm";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
-import makeServerClient from "~/core/lib/supa-client.server";
+import { and, desc, eq, exists, or } from "drizzle-orm";
+import { data } from "react-router";
+
 import db from "~/core/db/drizzle-client.server";
-import { workTeams, workTeamMembers } from "~/features/work/team-management/team-schema";
+import makeServerClient from "~/core/lib/supa-client.server";
+import {
+  workTeamMembers,
+  workTeams,
+} from "~/features/work/team-management/team-schema";
 
 /**
  * GET /api/teams
@@ -18,35 +22,42 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!user) return data({ error: "Unauthorized" }, { status: 401 });
 
   // 소유한 팀 + 멤버로 속한 팀 (active 상태만)
-  const teams = await db
-    .select({
-      team_id: workTeams.team_id,
-      name: workTeams.name,
-      description: workTeams.description,
-      owner_id: workTeams.owner_id,
-      created_at: workTeams.created_at,
-    })
-    .from(workTeams)
-    .where(
-      or(
-        eq(workTeams.owner_id, user.id as any),
-        exists(
-          db
-            .select()
-            .from(workTeamMembers)
-            .where(
-              and(
-                eq(workTeamMembers.team_id, workTeams.team_id),
-                eq(workTeamMembers.user_id, user.id as any),
-                eq(workTeamMembers.status, "active" as any),
+  try {
+    console.log("Loading teams for user:", user.id);
+    const teams = await db
+      .select({
+        team_id: workTeams.team_id,
+        name: workTeams.name,
+        description: workTeams.description,
+        owner_id: workTeams.owner_id,
+        created_at: workTeams.created_at,
+      })
+      .from(workTeams)
+      .where(
+        or(
+          eq(workTeams.owner_id, user.id as any),
+          exists(
+            db
+              .select()
+              .from(workTeamMembers)
+              .where(
+                and(
+                  eq(workTeamMembers.team_id, workTeams.team_id),
+                  eq(workTeamMembers.user_id, user.id as any),
+                  eq(workTeamMembers.status, "active" as any),
+                ),
               ),
-            ),
+          ),
         ),
-      ),
-    )
-    .orderBy(desc(workTeams.created_at));
+      )
+      .orderBy(desc(workTeams.created_at));
 
-  return data({ teams });
+    console.log("Teams loaded successfully:", teams.length);
+    return data({ teams });
+  } catch (error) {
+    console.error("Database error in teams loader:", error);
+    throw error;
+  }
 }
 
 /**
