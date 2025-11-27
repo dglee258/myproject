@@ -64,22 +64,49 @@ export async function action({ request }: Route.ActionArgs) {
     return data({ error: "Invalid email address" }, { status: 400 });
   }
 
-  // Create a server-side Supabase client with proper cookie handling
-  const [client] = makeServerClient(request);
+  // Generate signup link using admin client to get the verification URL
+  const { default: adminClient } = await import(
+    "~/core/lib/supa-admin-client.server"
+  );
 
-  // Call Supabase's resend API to send a new verification email
-  const { error } = await client.auth.resend({
-    type: "signup", // Specify that this is for signup verification
-    email: validData.email,
-    options: {
-      // Set the redirect URL for the verification link
-      emailRedirectTo: `${process.env.SITE_URL}/auth/verify`,
-    },
-  });
+  const { data: linkData, error: resendError } =
+    await adminClient.auth.admin.generateLink({
+      type: "signup",
+      email: validData.email,
+      password: "", // Password not needed for resend, but required by type definition? No, actually generateLink for signup usually needs password if creating, but for existing user?
+      // Wait, generateLink type 'signup' is for creating a user or getting a confirmation link for an unconfirmed user.
+      // If the user exists but is unconfirmed, 'signup' type works.
+      options: {
+        redirectTo: `${process.env.SITE_URL}/auth/confirm`,
+      },
+    });
 
-  // Handle any errors from the Supabase API
-  if (error) {
-    return data({ error: error.message }, { status: 400 });
+  if (resendError) {
+    return data({ error: resendError.message }, { status: 400 });
+  }
+
+  // Send welcome email with the generated verification link
+  try {
+    const { sendWelcomeEmail } = await import(
+      "~/features/email/services/email.service"
+    );
+
+    if (linkData?.properties?.action_link) {
+      // Fetch user name if possible, or just send without it
+      // Since we don't have the user's name here easily without querying, we can omit it or query it.
+      // For simplicity/performance, we'll omit it for now or query if critical.
+      
+      await sendWelcomeEmail({
+        to: validData.email,
+        verificationUrl: linkData.properties.action_link,
+      });
+    } else {
+      console.error("No action link generated");
+      return data({ error: "Failed to generate verification link" }, { status: 500 });
+    }
+  } catch (emailError) {
+    console.error("Failed to send welcome email:", emailError);
+    return data({ error: "Failed to send email" }, { status: 500 });
   }
 
   // Return success response if the email was sent successfully

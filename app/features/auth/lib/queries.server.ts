@@ -27,3 +27,28 @@ export async function doesUserExist(email: string) {
 
   return totalUsers[0].count > 0;
 }
+
+/**
+ * Check user status including email confirmation
+ *
+ * @param email - The email address to check
+ * @returns Object containing existence and confirmation status
+ */
+export async function getUserStatus(email: string) {
+  const users = await db
+    .select({
+      emailConfirmedAt: authUsers.emailConfirmedAt,
+    })
+    .from(authUsers)
+    .where(eq(authUsers.email, email))
+    .limit(1);
+
+  if (users.length === 0) {
+    return { exists: false, confirmed: false };
+  }
+
+  return {
+    exists: true,
+    confirmed: !!users[0].emailConfirmedAt,
+  };
+}

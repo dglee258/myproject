@@ -43,7 +43,7 @@ export const meta: Route.MetaFunction = () => {
  */
 const searchParamsSchema = z.object({
   token_hash: z.string(),
-  type: z.enum(["email", "recovery", "email_change"]),
+  type: z.enum(["email", "recovery", "email_change", "signup"]),
   next: z.string().default("/"),
 });
 

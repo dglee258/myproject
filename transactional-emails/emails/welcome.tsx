@@ -24,7 +24,7 @@ interface WelcomeEmailProps {
 export default function WelcomeEmail({
   userName = "사용자",
   verificationUrl,
-  dashboardUrl = "https://synchro.app/work/upload",
+  dashboardUrl = "https://synchro.it.com/work/upload",
 }: WelcomeEmailProps) {
   return (
     <Html>
@@ -38,7 +38,7 @@ export default function WelcomeEmail({
           {/* Header */}
           <Section style={header}>
             <Img
-              src="https://synchro.app/logo.png"
+              src="https://synchro.it.com/logo.png"
               width="120"
               height="40"
               alt="싱크로 로고"
@@ -129,8 +129,8 @@ export default function WelcomeEmail({
           <Section style={supportSection}>
             <Text style={supportText}>
               궁금한 점이 있으신가요? 언제든지{" "}
-              <Link href="mailto:support@synchro.app" style={supportLink}>
-                support@synchro.app
+              <Link href="mailto:support@mail.synchro.it.com" style={supportLink}>
+                support@mail.synchro.it.com
               </Link>
               으로 문의해주세요.
             </Text>

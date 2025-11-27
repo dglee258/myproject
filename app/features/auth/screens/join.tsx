@@ -28,10 +28,8 @@ import {
 import { Checkbox } from "~/core/components/ui/checkbox";
 import { Input } from "~/core/components/ui/input";
 import { Label } from "~/core/components/ui/label";
-import makeServerClient from "~/core/lib/supa-client.server";
 
 import { SignUpButtons } from "../components/auth-login-buttons";
-import { doesUserExist } from "../lib/queries.server";
 
 /**
  * Meta function for the registration page
@@ -116,31 +114,46 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   // Check if a user with the provided email already exists
-  const userExists = await doesUserExist(validData.email);
+  const { getUserStatus } = await import("../lib/queries.server");
+  const userStatus = await getUserStatus(validData.email);
 
-  if (userExists) {
+  // Generate signup link using admin client
+  const { default: adminClient } = await import(
+    "~/core/lib/supa-admin-client.server"
+  );
+
+  // If user exists and is confirmed, return error
+  if (userStatus.exists && userStatus.confirmed) {
     return data(
-      { error: "There is an account with this email already." },
+      { error: "이미 가입된 이메일입니다. 로그인을 시도해주세요." },
       { status: 400 },
     );
   }
 
-  // Create Supabase client and attempt to sign up the user
-  const [client] = makeServerClient(request);
-  const { error: signInError } = await client.auth.signUp({
-    ...validData,
-    options: {
-      // Store additional user metadata in Supabase auth
-      data: {
-        name: validData.name,
-        avatar_url: validData.avatarUrl,
+  // If user exists but NOT confirmed, or doesn't exist, proceed to generate link
+  // If unverified, this will effectively resend the verification link
+  
+  const { data: linkData, error: signUpError } =
+    await adminClient.auth.admin.generateLink({
+      type: "signup",
+      email: validData.email,
+      password: validData.password,
+      options: {
+        data: {
+          name: validData.name,
+          avatar_url: validData.avatarUrl,
+          marketing_consent: validData.marketing,
+        },
+        redirectTo: `${process.env.SITE_URL}/auth/confirm`,
       },
-    },
-  });
+    });
 
-  // Handle rate limiting error
-  if (signInError) {
-    if (signInError.status === 429) {
+  console.log("Generated Link Data:", linkData);
+  console.log("Redirect URL used:", `${process.env.SITE_URL}/auth/confirm`);
+
+  if (signUpError) {
+    console.error("Signup error:", signUpError);
+    if (signUpError.status === 429) {
       return data(
         {
           error:
@@ -149,26 +162,30 @@ export async function action({ request }: Route.ActionArgs) {
         { status: 429 },
       );
     }
-    return data({ error: signInError.message }, { status: 400 });
+    return data({ error: signUpError.message }, { status: 400 });
   }
 
-  // Send welcome email using beautiful React Email template
+  // Send welcome email with the generated verification link
   try {
     const { sendWelcomeEmail } = await import(
       "~/features/email/services/email.service"
     );
 
-    await sendWelcomeEmail({
-      to: validData.email,
-      userName: validData.name,
-      verificationUrl: `${process.env.SITE_URL}/auth/verify`,
-    });
+    if (linkData?.properties?.action_link) {
+      await sendWelcomeEmail({
+        to: validData.email,
+        userName: validData.name,
+        verificationUrl: linkData.properties.action_link,
+      });
+    } else {
+      console.error("No action link generated");
+    }
   } catch (emailError) {
-    // Log error but don't fail the signup process
     console.error("Failed to send welcome email:", emailError);
   }
 
-  // Return success response - redirect to login page with success message
+  // Return success response
+  // If it was an existing unverified user, the message implies we sent a verification link
   return redirect("/login?message=signup_success");
 }
 

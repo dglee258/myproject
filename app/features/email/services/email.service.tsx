@@ -23,12 +23,12 @@ export async function sendWelcomeEmail({
     );
 
     const { data, error } = await resend.emails.send({
-      from: "싱크로 <noreply@synchro.app>",
+      from: "Synchro <onboarding@mail.synchro.it.com>",
       to: [to],
       subject:
         "싱크로에 오신 것을 환영합니다! AI 기반 업무프로세스 자동화를 시작해보세요",
       html: emailHtml,
-      replyTo: "support@synchro.app",
+      replyTo: "support@mail.synchro.it.com",
     });
 
     if (error) {
