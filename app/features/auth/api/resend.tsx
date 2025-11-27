@@ -19,7 +19,7 @@ import type { Route } from "./+types/resend";
 import { data } from "react-router";
 import { z } from "zod";
 
-import makeServerClient from "~/core/lib/supa-client.server";
+
 
 /**
  * Validation schema for email resend requests
