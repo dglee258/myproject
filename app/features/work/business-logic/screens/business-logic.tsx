@@ -818,6 +818,17 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
     setMounted(true);
   }, []);
 
+  // URL query param으로 워크플로우 선택
+  useEffect(() => {
+    const workflowId = searchParams.get("workflow");
+    if (workflowId && mockVideos.length > 0) {
+      const targetVideo = mockVideos.find((v) => v.id === workflowId);
+      if (targetVideo) {
+        setSelectedVideo(targetVideo);
+      }
+    }
+  }, [searchParams, mockVideos]);
+
   // DnD sensors
   const sensors = useSensors(
     useSensor(PointerSensor, {

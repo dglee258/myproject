@@ -8,10 +8,10 @@ import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import db from "~/core/db/drizzle-client.server";
 
 import { workWorkflowMembers } from "../team-management/schema";
-import {
-  workTeamMembers,
-  workWorkflowShares,
-} from "../team-management/team-schema";
+
+
+import { workTeamMembers } from "../team-management/team-schema";
+import { workWorkflowShares } from "../team-management/team-shares-schema";
 import { workAnalysisSteps, workWorkflows } from "./schema";
 
 /**

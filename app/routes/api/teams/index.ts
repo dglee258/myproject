@@ -82,26 +82,32 @@ export async function action({ request }: ActionFunctionArgs) {
     return data({ error: "Team name is required" }, { status: 400 });
   }
 
-  // 팀 생성
-  const [team] = await db
-    .insert(workTeams)
-    .values({
-      name,
-      description: description || null,
-      owner_id: user.id as any,
-    })
-    .returning();
+  try {
+    // 팀 생성
+    const [team] = await db
+      .insert(workTeams)
+      .values({
+        team_id: crypto.randomUUID(),
+        name,
+        description: description || null,
+        owner_id: user.id as any,
+      })
+      .returning();
 
-  // 팀 owner를 팀 멤버에 추가 (owner role, active status)
-  await db.insert(workTeamMembers).values({
-    team_id: team.team_id,
-    user_id: user.id as any,
-    email: user.email || null,
-    role: "owner" as any,
-    status: "active" as any,
-    invited_by: user.id as any,
-    joined_at: new Date(),
-  });
+    // 팀 owner를 팀 멤버에 추가 (owner role, active status)
+    await db.insert(workTeamMembers).values({
+      team_id: team.team_id,
+      user_id: user.id as any,
+      email: user.email || "",
+      role: "owner" as any,
+      status: "active" as any,
+      invited_by: user.id as any,
+      joined_at: new Date(),
+    });
 
-  return data({ team }, { status: 201 });
+    return data({ team }, { status: 201 });
+  } catch (error: any) {
+    console.error("Error creating team:", error);
+    return data({ error: error.message || "Failed to create team" }, { status: 500 });
+  }
 }

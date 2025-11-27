@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Copy,
   Eye,
+  FileVideo,
   Link as LinkIcon,
   Loader2,
   Mail,
@@ -17,11 +18,22 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "~/core/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/core/components/ui/alert-dialog";
 import { Badge } from "~/core/components/ui/badge";
 import { Button } from "~/core/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/core/components/ui/card";
@@ -43,6 +55,7 @@ import {
 } from "~/core/components/ui/dropdown-menu";
 import { Input } from "~/core/components/ui/input";
 import { Label } from "~/core/components/ui/label";
+import { Separator } from "~/core/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -166,6 +179,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
+  const [workflowToUnshare, setWorkflowToUnshare] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -354,30 +368,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       setTeams([newTeam, ...teams]);
       setTeamId(newTeam.team_id);
 
-      // Share selected workflows with the new team
-      if (selectedWorkflows.length > 0) {
-        try {
-          const shareRes = await fetch(
-            `/api/teams/${newTeam.team_id}/workflows/migrate`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                workflow_ids: selectedWorkflows,
-              }),
-            },
-          );
 
-          if (shareRes.ok) {
-            const shareJson = await shareRes.json();
-            toast.success(
-              `${shareJson.migrated_count}개의 업무 프로세스가 팀에 공유되었습니다`,
-            );
-          }
-        } catch (e) {
-          console.error("Failed to share workflows with team", e);
-        }
-      }
 
       // Load members for the new team
       try {
@@ -398,7 +389,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
       setIsCreateTeamDialogOpen(false);
       setNewTeamName("");
       setNewTeamDescription("");
-      setSelectedWorkflows([]);
+
     } catch (e: any) {
       toast.error(e.message || "팀 생성에 실패했습니다");
     } finally {
@@ -583,18 +574,27 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
     }
   }
 
-  // Remove workflow from team
-  async function handleRemoveWorkflow(workflowId: string) {
-    if (!teamId) return;
+  // Open unshare confirmation
+  function handleRemoveWorkflow(workflowId: string) {
+    setWorkflowToUnshare(workflowId);
+  }
+
+  // Confirm unshare
+  async function confirmUnshare() {
+    if (!teamId || !workflowToUnshare) return;
 
     try {
-      const res = await fetch(`/api/teams/${teamId}/workflows/${workflowId}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `/api/teams/${teamId}/workflows/${workflowToUnshare}`,
+        {
+          method: "DELETE",
+        },
+      );
 
       if (!res.ok) throw new Error("공유 중지 실패");
 
       toast.success("업무 프로세스 공유가 중지되었습니다");
+      setWorkflowToUnshare(null);
 
       // Reload team workflows
       const workflowsRes = await fetch(`/api/teams/${teamId}/workflows`);
@@ -637,227 +637,160 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
   }
 
   return (
-    <div className="container mx-auto max-w-7xl space-y-6 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">팀 관리</h1>
-          <p className="text-muted-foreground mt-1">
-            팀원을 초대하고 워크플로우를 공유하세요
-          </p>
+    <div className="min-h-[calc(100vh-4rem)] w-full bg-slate-50/50 p-4 lg:p-8 dark:bg-slate-950/50">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mx-auto max-w-7xl space-y-8"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">팀 관리</h1>
+            <p className="mt-2 text-slate-500 dark:text-slate-400">
+              팀원을 초대하고 워크플로우를 공유하세요
+            </p>
+          </div>
         </div>
-      </div>
 
-      {/* Team Selection */}
+      {/* Unified Team Management UI */}
       {teams.length === 0 ? (
-        <Card className="p-12 text-center">
-          <Users className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
-          <h3 className="mb-2 text-lg font-semibold">팀이 없습니다</h3>
-          <p className="text-muted-foreground mb-4 text-sm">
+        <div className="rounded-2xl border border-white/20 bg-white/40 p-12 text-center shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/40">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+            <Users className="h-8 w-8 text-slate-400" />
+          </div>
+          <h3 className="mb-2 text-xl font-semibold text-slate-900 dark:text-slate-100">팀이 없습니다</h3>
+          <p className="mb-6 text-slate-500 dark:text-slate-400">
             새로운 팀을 생성하고 팀원들을 초대하여 협업을 시작하세요.
           </p>
-          <Button onClick={() => setIsCreateTeamDialogOpen(true)}>
+          <Button 
+            onClick={() => setIsCreateTeamDialogOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+          >
             <Plus className="mr-2 h-4 w-4" />첫 팀 생성하기
           </Button>
-        </Card>
+        </div>
       ) : (
-        <Card className="p-6">
-          <div className="space-y-4">
-            {/* 팀 선택 섹션 헤더 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <Label
-                  htmlFor="team-select"
-                  className="text-base font-semibold"
-                >
-                  팀 선택
-                </Label>
-                <p className="text-muted-foreground mt-1 text-sm">
-                  관리할 팀을 선택하세요
-                </p>
-              </div>
-
-              {/* 사용자 정보 배지 */}
-              <div className="flex items-center gap-2">
-                {myRole && (
-                  <Badge variant="outline" className="text-sm">
-                    {myRole === "owner"
-                      ? "소유자"
-                      : myRole === "admin"
-                        ? "관리자"
-                        : "사용자"}
-                  </Badge>
-                )}
-                {myStatus && (
-                  <Badge
-                    variant={myStatus === "active" ? "default" : "secondary"}
-                    className="text-sm"
-                  >
-                    {myStatus === "active"
-                      ? "활동 중"
-                      : myStatus === "pending"
-                        ? "초대 대기"
-                        : "비활성"}
-                  </Badge>
-                )}
-              </div>
-            </div>
-
-            {/* 팀 선택 컨트롤 */}
-            <div className="flex gap-2">
-              <Select value={teamId} onValueChange={setTeamId}>
-                <SelectTrigger id="team-select" className="flex-1">
-                  <SelectValue placeholder="팀을 선택하세요" />
-                </SelectTrigger>
-                <SelectContent>
-                  {teams.map((team) => (
-                    <SelectItem key={team.team_id} value={team.team_id}>
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-blue-500"></div>
-                        {team.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                onClick={() => setIsCreateTeamDialogOpen(true)}
-                className="shrink-0"
-              >
-                <Plus className="mr-2 h-4 w-4" />새 팀 생성
-              </Button>
-            </div>
-
-            {/* 선택된 팀 정보 */}
-            {selectedTeam && (
-              <div className="bg-muted/50 rounded-lg p-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
-                      <Users className="h-4 w-4 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{selectedTeam.name}</p>
-                      <p className="text-muted-foreground text-xs">
-                        {selectedTeam.description || "팀 설명이 없습니다"}
-                      </p>
-                    </div>
+        <div className="overflow-hidden rounded-2xl border border-white/20 bg-white/40 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/40">
+          {/* 1. Header & Team Selection */}
+          <div className="p-6">
+            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-1 items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/30">
+                  <Users className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                      {selectedTeam ? selectedTeam.name : "팀 선택"}
+                    </h2>
+                    {myRole && (
+                      <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-300">
+                        {myRole === "owner" ? "소유자" : myRole === "admin" ? "관리자" : "사용자"}
+                      </Badge>
+                    )}
+                    {myStatus && (
+                      <Badge
+                        variant={myStatus === "active" ? "default" : "secondary"}
+                        className={myStatus === "active" ? "bg-emerald-500 hover:bg-emerald-600" : ""}
+                      >
+                        {myStatus === "active" ? "활동 중" : myStatus === "pending" ? "초대 대기" : "비활성"}
+                      </Badge>
+                    )}
                   </div>
-                  <div className="text-right">
-                    <p className="text-muted-foreground text-xs">팀원 수</p>
-                    <p className="text-sm font-medium">{members.length}명</p>
+                  <div className="flex items-center gap-2">
+                    <Select value={teamId} onValueChange={setTeamId}>
+                      <SelectTrigger className="h-8 w-[200px] border-none bg-transparent p-0 text-sm text-slate-500 shadow-none hover:text-slate-900 focus:ring-0 dark:text-slate-400 dark:hover:text-slate-200">
+                        <SelectValue placeholder="팀 변경하기" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teams.map((team) => (
+                          <SelectItem key={team.team_id} value={team.team_id}>
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-2 rounded-full bg-indigo-500"></div>
+                              {team.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsCreateTeamDialogOpen(true)}
+                      className="h-8 px-2 text-xs text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 dark:text-indigo-400 dark:hover:bg-indigo-950/30"
+                    >
+                      <Plus className="mr-1 h-3 w-3" /> 새 팀
+                    </Button>
                   </div>
                 </div>
               </div>
-            )}
+
+              {isAdmin && (
+                <Button
+                  onClick={() => setIsInviteDialogOpen(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                >
+                  <UserPlus className="mr-2 h-4 w-4" /> 팀원 초대
+                </Button>
+              )}
+            </div>
           </div>
-        </Card>
-      )}
 
-      {/* Status Alert */}
-      {teamId && myStatus && myStatus !== "active" && (
-        <Alert className="mb-6">
-          {myStatus === "pending" ? (
-            <>
-              <Mail className="h-4 w-4" />
-              <AlertDescription>
-                <strong>초대 대기 중입니다.</strong> 이메일로 받은 초대 링크를
-                통해 팀 가입을 완료해주세요. 초대 링크가 없다면 팀 관리자에게
-                문의하세요.
-              </AlertDescription>
-            </>
-          ) : (
-            <>
-              <X className="h-4 w-4" />
-              <AlertDescription>
-                <strong>팀에서 제외되었습니다.</strong> 팀 활동에 참여할 수
-                없습니다. 팀 관리자에게 재초대를 요청하세요.
-              </AlertDescription>
-            </>
-          )}
-        </Alert>
-      )}
+          <Separator className="bg-slate-200/50 dark:bg-slate-700/50" />
 
-      {/* Statistics */}
-      {teamId && (
-        <div className="mb-6 grid gap-4 md:grid-cols-3">
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-blue-100 p-3">
-                <Users className="h-5 w-5 text-blue-600" />
+          {/* 2. Statistics Bar */}
+          <div className="grid grid-cols-3 divide-x divide-slate-200/50 bg-slate-50/30 dark:divide-slate-700/50 dark:bg-slate-800/30">
+            <div className="flex items-center justify-center gap-3 p-4 transition-colors hover:bg-slate-100/50 dark:hover:bg-slate-800/50">
+              <div className="rounded-full bg-slate-200/50 p-2 dark:bg-slate-700/50">
+                <Users className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               </div>
               <div>
-                <p className="text-muted-foreground text-sm">전체 팀원</p>
-                <p className="text-2xl font-bold">{members.length}</p>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">전체 팀원</p>
+                <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{members.length}</p>
               </div>
             </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-green-100 p-3">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
+            <div className="flex items-center justify-center gap-3 p-4 transition-colors hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10">
+              <div className="rounded-full bg-emerald-100/50 p-2 dark:bg-emerald-900/30">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div>
-                <p className="text-muted-foreground text-sm">활동 중</p>
-                <p className="text-2xl font-bold">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">활동 중</p>
+                <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
                   {members.filter((m) => m.status === "active").length}
                 </p>
               </div>
             </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-yellow-100 p-3">
-                <Mail className="h-5 w-5 text-yellow-600" />
+            <div className="flex items-center justify-center gap-3 p-4 transition-colors hover:bg-amber-50/50 dark:hover:bg-amber-900/10">
+              <div className="rounded-full bg-amber-100/50 p-2 dark:bg-amber-900/30">
+                <Mail className="h-4 w-4 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
-                <p className="text-muted-foreground text-sm">대기 중</p>
-                <p className="text-2xl font-bold">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">대기 중</p>
+                <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
                   {members.filter((m) => m.status === "pending").length}
                 </p>
               </div>
             </div>
-          </Card>
-        </div>
-      )}
+          </div>
 
-      {/* Team Members Section */}
-      {teamId && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">팀원 목록</h3>
-                <p className="text-muted-foreground text-sm">팀원 목록입니다</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{members.length}명</Badge>
-                {isAdmin && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsInviteDialogOpen(true)}
-                  >
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    팀원 초대
-                  </Button>
-                )}
-              </div>
-            </div>
+          <Separator className="bg-slate-200/50 dark:bg-slate-700/50" />
+
+          {/* 3. Member List */}
+          <div className="p-6">
             {/* Search and Filter */}
-            <div className="mt-4 flex flex-col gap-4 md:flex-row">
+            <div className="mb-6 flex flex-col gap-4 md:flex-row">
               <div className="relative flex-1">
-                <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
                   placeholder="이메일로 검색..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
+                  className="border-slate-200 bg-white/50 pl-10 focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900/50"
                 />
               </div>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px] border-slate-200 bg-white/50 dark:border-slate-700 dark:bg-slate-900/50">
                   <SelectValue placeholder="상태 필터" />
                 </SelectTrigger>
                 <SelectContent>
@@ -868,20 +801,22 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 </SelectContent>
               </Select>
             </div>
-          </CardHeader>
-          <CardContent>
+
+            {/* Table */}
             {filteredMembers.length === 0 ? (
-              <div className="py-8 text-center">
-                <Users className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
-                <h4 className="mb-2 text-lg font-semibold">팀원이 없습니다</h4>
-                <p className="text-muted-foreground text-sm">
+              <div className="py-12 text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                  <Users className="h-6 w-6 text-slate-400" />
+                </div>
+                <h4 className="mb-2 text-lg font-semibold text-slate-900 dark:text-slate-100">팀원이 없습니다</h4>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
                   {searchQuery || filterStatus !== "all"
                     ? "검색 조건에 맞는 팀원이 없습니다"
                     : "이 팀에는 아직 팀원이 없습니다"}
                 </p>
                 {!searchQuery && filterStatus === "all" && isAdmin && (
                   <Button
-                    className="mt-4"
+                    className="mt-4 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
                     onClick={() => setIsInviteDialogOpen(true)}
                   >
                     <UserPlus className="mr-2 h-4 w-4" />첫 팀원 초대하기
@@ -889,10 +824,10 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 )}
               </div>
             ) : (
-              <div className="rounded-md border">
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white/50 dark:border-slate-800 dark:bg-slate-900/50">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
+                  <TableHeader className="bg-slate-50/50 dark:bg-slate-800/50">
+                    <TableRow className="hover:bg-transparent">
                       <TableHead>이메일</TableHead>
                       <TableHead>역할</TableHead>
                       <TableHead>상태</TableHead>
@@ -903,8 +838,8 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                   </TableHeader>
                   <TableBody>
                     {filteredMembers.map((member) => (
-                      <TableRow key={member.member_id}>
-                        <TableCell className="font-medium">
+                      <TableRow key={member.member_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                        <TableCell className="font-medium text-slate-900 dark:text-slate-100">
                           {member.email}
                         </TableCell>
                         <TableCell>
@@ -916,7 +851,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                               }
                               disabled={!isAdmin}
                             >
-                              <SelectTrigger className="w-[100px]">
+                              <SelectTrigger className="w-[100px] border-slate-200 bg-transparent dark:border-slate-700">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -925,7 +860,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                               </SelectContent>
                             </Select>
                           ) : (
-                            <Badge variant="outline">
+                            <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                               {member.role === "owner"
                                 ? "소유자"
                                 : member.role === "admin"
@@ -943,6 +878,13 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                                   ? "secondary"
                                   : "outline"
                             }
+                            className={
+                              member.status === "active" 
+                                ? "bg-emerald-500 hover:bg-emerald-600" 
+                                : member.status === "pending"
+                                  ? "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300"
+                                  : ""
+                            }
                           >
                             {member.status === "active"
                               ? "활동 중"
@@ -951,12 +893,12 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                                 : "제외됨"}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-slate-500 dark:text-slate-400">
                           {new Date(member.invited_at).toLocaleDateString(
                             "ko-KR",
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-slate-500 dark:text-slate-400">
                           {member.joined_at
                             ? new Date(member.joined_at).toLocaleDateString(
                                 "ko-KR",
@@ -969,13 +911,13 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                             member.status !== "inactive" && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                                     <MoreVertical className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem
-                                    className="text-destructive"
+                                    className="text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
                                     onClick={() => openDeleteDialog(member)}
                                   >
                                     <X className="mr-2 h-4 w-4" />
@@ -991,110 +933,118 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 </Table>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Team Processes Section */}
       {teamId && myStatus === "active" && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">팀 업무 프로세스</h3>
-                <p className="text-muted-foreground text-sm">
-                  업무 프로세스 목록입니다
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{teamProcesses.length}개</Badge>
-                {isAdmin && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedWorkflows([]);
-                      setIsShareDialogOpen(true);
-                    }}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    업무 프로세스 공유
-                  </Button>
-                )}
-              </div>
+        <div className="rounded-2xl border border-white/20 bg-white/40 p-6 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/40">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">팀 업무 프로세스</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                업무 프로세스 목록입니다
+              </p>
             </div>
-          </CardHeader>
-          <CardContent>
-            {teamProcesses.length === 0 ? (
-              <div className="py-8 text-center">
-                <LinkIcon className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
-                <h4 className="mb-2 text-lg font-semibold">
-                  업무 프로세스가 없습니다
-                </h4>
-                <p className="text-muted-foreground text-sm">
-                  이 팀에는 아직 업무 프로세스가 없습니다.
-                </p>
-                <p className="text-muted-foreground mt-2 text-xs">
-                  참고: 새 팀을 생성할 때 내 업무 프로세스를 선택하여 공유할 수
-                  있습니다.
-                </p>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="border-slate-200 bg-white/50 dark:border-slate-700 dark:bg-slate-800/50">
+                {teamProcesses.length}개
+              </Badge>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedWorkflows([]);
+                    setIsShareDialogOpen(true);
+                  }}
+                  className="border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  업무 프로세스 공유
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {teamProcesses.length === 0 ? (
+            <div className="py-12 text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                <LinkIcon className="h-6 w-6 text-slate-400" />
               </div>
-            ) : (
-              <div className="max-h-96 space-y-3 overflow-y-auto">
-                {teamProcesses.map((workflow) => (
-                  <div
-                    key={workflow.workflow_id}
-                    className="hover:bg-muted/50 flex items-center justify-between rounded-lg border p-4"
-                  >
-                    <div className="flex-1">
-                      <h4 className="font-medium">{workflow.title}</h4>
-                      {workflow.description && (
-                        <p className="text-muted-foreground mt-1 text-sm">
-                          {workflow.description}
-                        </p>
-                      )}
-                      <div className="mt-2 flex items-center gap-4">
-                        <Badge variant="outline" className="text-xs">
-                          {workflow.status}
-                        </Badge>
-                        <span className="text-muted-foreground text-xs">
-                          생성:{" "}
-                          {new Date(workflow.created_at).toLocaleDateString(
-                            "ko-KR",
-                          )}
-                        </span>
+              <h4 className="mb-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                업무 프로세스가 없습니다
+              </h4>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                이 팀에는 아직 업무 프로세스가 없습니다.
+              </p>
+              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+                참고: 새 팀을 생성할 때 내 업무 프로세스를 선택하여 공유할 수
+                있습니다.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {teamProcesses.map((workflow) => (
+                <div
+                  key={workflow.workflow_id}
+                  className="group relative flex flex-col justify-between overflow-hidden rounded-xl border border-slate-200 bg-white/50 p-5 transition-all hover:border-indigo-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-indigo-700"
+                >
+                  <div>
+                    <div className="mb-3 flex items-start justify-between">
+                      <div className="rounded-lg bg-indigo-100 p-2 dark:bg-indigo-900/30">
+                        <FileVideo className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                       </div>
+                      <Badge variant="outline" className="text-xs">
+                        {workflow.status}
+                      </Badge>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" asChild>
-                        <Link
-                          to={`/work/business-logic?workflow=${workflow.workflow_id}`}
-                        >
-                          <Eye className="mr-2 h-4 w-4" />
-                          보기
-                        </Link>
-                      </Button>
-                      {isAdmin && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            handleRemoveWorkflow(
-                              workflow.workflow_id.toString(),
-                            )
-                          }
-                        >
-                          <X className="mr-2 h-4 w-4" />
-                          공유 중지
-                        </Button>
+                    <h4 className="mb-1 font-semibold text-slate-900 dark:text-slate-100 line-clamp-1">{workflow.title}</h4>
+                    {workflow.description && (
+                      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400 line-clamp-2">
+                        {workflow.description}
+                      </p>
+                    )}
+                    <div className="mb-4 text-xs text-slate-400 dark:text-slate-500">
+                      생성:{" "}
+                      {new Date(workflow.created_at).toLocaleDateString(
+                        "ko-KR",
                       )}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  
+                  <div className="flex items-center gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <Button variant="outline" size="sm" className="flex-1 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400" asChild>
+                      <Link
+                        to={`/work/business-logic?workflow=${workflow.workflow_id}`}
+                      >
+                        <Eye className="mr-2 h-4 w-4" />
+                        보기
+                      </Link>
+                    </Button>
+                    {isAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                        onClick={() =>
+                          handleRemoveWorkflow(
+                            workflow.workflow_id.toString(),
+                          )
+                        }
+                        title="공유 중지"
+                      >
+                        <X className="mr-1 h-4 w-4" />
+                        <span className="text-xs">공유 중지</span>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Invite Dialog */}
@@ -1309,68 +1259,7 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
               />
             </div>
 
-            {/* Workflow Selection */}
-            {userWorkflows.length > 0 && (
-              <div className="space-y-2">
-                <Label>팀에 공유할 업무 프로세스 선택</Label>
-                <div className="max-h-40 overflow-y-auto rounded-md border p-2">
-                  {userWorkflows.map((workflow: any) => (
-                    <div
-                      key={workflow.workflow_id}
-                      className="flex items-center space-x-2 py-1"
-                    >
-                      <Checkbox
-                        id={`workflow-${workflow.workflow_id}`}
-                        checked={selectedWorkflows.includes(
-                          workflow.workflow_id.toString(),
-                        )}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedWorkflows([
-                              ...selectedWorkflows,
-                              workflow.workflow_id.toString(),
-                            ]);
-                          } else {
-                            setSelectedWorkflows(
-                              selectedWorkflows.filter(
-                                (id) => id !== workflow.workflow_id.toString(),
-                              ),
-                            );
-                          }
-                        }}
-                        disabled={isCreatingTeam}
-                      />
-                      <Label
-                        htmlFor={`workflow-${workflow.workflow_id}`}
-                        className="flex flex-1 cursor-pointer items-center gap-2 text-sm"
-                      >
-                        <span>{workflow.title}</span>
-                        {workflow.team_id &&
-                          workflow.team_id !== "" &&
-                          workflow.team_id !== null && (
-                            <Badge variant="secondary" className="text-xs">
-                              이미 공유됨 (복사됨)
-                            </Badge>
-                          )}
-                        {(!workflow.team_id ||
-                          workflow.team_id === "" ||
-                          workflow.team_id === null) && (
-                          <Badge variant="outline" className="text-xs">
-                            개인
-                          </Badge>
-                        )}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
-            {userWorkflows.length === 0 && (
-              <div className="text-muted-foreground text-sm">
-                공유할 업무 프로세스가 없습니다.
-              </div>
-            )}
           </div>
           <DialogFooter>
             <Button
@@ -1379,7 +1268,6 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
                 setIsCreateTeamDialogOpen(false);
                 setNewTeamName("");
                 setNewTeamDescription("");
-                setSelectedWorkflows([]);
               }}
               disabled={isCreatingTeam}
             >
@@ -1501,6 +1389,31 @@ export default function TeamManagement({ loaderData }: Route.ComponentProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Unshare Confirmation Dialog */}
+      <AlertDialog
+        open={!!workflowToUnshare}
+        onOpenChange={(open) => !open && setWorkflowToUnshare(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>공유를 중지하시겠습니까?</AlertDialogTitle>
+            <AlertDialogDescription>
+              이 업무 프로세스를 팀에서 제거합니다. 팀원들은 더 이상 이 프로세스에 접근할 수 없게 됩니다.
+              (원본 데이터는 삭제되지 않습니다)
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmUnshare}
+              className="bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700"
+            >
+              공유 중지
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      </motion.div>
     </div>
   );
 }
