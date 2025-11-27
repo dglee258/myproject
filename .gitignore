@@ -3,6 +3,7 @@
 # React Router
 /.react-router/
 /build/
+/backup/
 .env
 Check_LIst.md
 
