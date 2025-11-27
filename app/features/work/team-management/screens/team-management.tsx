@@ -75,7 +75,7 @@ import { Textarea } from "~/core/components/ui/textarea";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "팀원관리" },
+    { title: "팀관리" },
     { name: "description", content: "팀 관리 페이지" },
   ];
 }

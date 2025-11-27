@@ -49,7 +49,7 @@ const baseNavItems = [
     icon: UploadIcon,
   },
   {
-    title: "팀원관리",
+    title: "팀관리",
     url: "/work/team-management",
     icon: UsersIcon,
   },
