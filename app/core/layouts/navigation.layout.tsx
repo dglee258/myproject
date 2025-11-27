@@ -11,7 +11,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     "../lib/supa-client.server"
   );
   const [client] = makeServerClient(request);
-  const userPromise = client.auth.getUser();
+  // Handle potential auth errors (e.g. invalid refresh token) gracefully
+  // If the token is invalid, we treat the user as logged out
+  const userPromise = client.auth
+    .getUser()
+    .catch(() => ({ data: { user: null } }));
   return { userPromise };
 }
 

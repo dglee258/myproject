@@ -14,6 +14,9 @@ import * as teamManagementSchema from "~/features/work/team-management/schema";
 // Work feature schemas
 import * as uploadSchema from "~/features/work/upload/schema";
 
+import * as teamSchema from "~/features/work/team-management/team-schema";
+import * as teamSharesSchema from "~/features/work/team-management/team-shares-schema";
+
 const client = postgres(process.env.DATABASE_URL!, { prepare: false });
 
 const db = drizzle(client, {
@@ -21,6 +24,8 @@ const db = drizzle(client, {
     ...uploadSchema,
     ...businessLogicSchema,
     ...teamManagementSchema,
+    ...teamSchema,
+    ...teamSharesSchema,
     ...shareSchema,
     ...rateLimitSchema,
     ...usersSchema,

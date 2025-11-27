@@ -28,34 +28,106 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  // Feature flags 조회
-  const { getFeatureFlags } = await import("~/core/features/queries.server");
-  const flags = await getFeatureFlags([
-    "signup",
-    "service_demo_cta",
-    "service_pricing_cta",
-  ]);
+  // Hardcoded feature flags
+  const flags = {
+    signup: { isEnabled: true, disabledMessage: "" },
+    service_demo_cta: { isEnabled: true, disabledMessage: "" },
+    service_pricing_cta: { isEnabled: true, disabledMessage: "" },
+  };
 
-  // 서비스 페이지 콘텐츠 조회
-  // DB에 service_sections / service_items 테이블이 없거나 에러가 발생해도
-  // 기본 하드코딩 텍스트로 페이지가 동작하도록 가드를 추가합니다.
+  // Hardcoded service page content
+  const content = {
+    hero: {
+      badge_text: "AI 업무 프로세스 자동화",
+      title: "동영상 하나로",
+      subtitle: "업무 프로세스가 완성됩니다",
+      description: "업무 화면을 녹화만 하세요. AI가 자동으로 분석하여 단계별 프로세스 문서를 만들어드립니다",
+    },
+    how_it_works: {
+      title: "어떻게 작동하나요?",
+      description: "3단계로 업무 프로세스 문서화가 완성됩니다",
+      items: [
+        {
+          item_id: 1,
+          title: "화면 녹화",
+          description: "평소처럼 업무를 진행하며 화면을 녹화하세요.",
+          icon: "FileVideo",
+        },
+        {
+          item_id: 2,
+          title: "AI 분석",
+          description: "AI가 영상을 분석하여 클릭, 타이핑 등 작업을 인식합니다.",
+          icon: "Bot",
+        },
+        {
+          item_id: 3,
+          title: "문서 생성",
+          description: "단계별 스크린샷과 설명이 포함된 가이드가 생성됩니다.",
+          icon: "CheckCircle2",
+        },
+      ],
+    },
+    key_features: {
+      title: "핵심 기능",
+      description: "업무 프로세스 관리에 필요한 모든 기능을 제공합니다",
+      items: [
+        {
+          item_id: 1,
+          title: "자동 문서화",
+          description: "영상만 있으면 누구나 쉽게 매뉴얼을 만들 수 있습니다.",
+          icon: "Sparkles",
+        },
+        {
+          item_id: 2,
+          title: "팀 협업",
+          description: "생성된 문서를 팀원들과 공유하고 함께 편집하세요.",
+          icon: "Users",
+        },
+        {
+          item_id: 3,
+          title: "스마트 편집",
+          description: "AI가 제안한 내용을 손쉽게 수정하고 보완할 수 있습니다.",
+          icon: "Lightbulb",
+        },
+      ],
+    },
+    use_cases: {
+      title: "이런 업무에 활용하세요",
+      description: "다양한 업무 프로세스를 빠르게 문서화할 수 있습니다",
+      items: [
+        {
+          item_id: 1,
+          title: "신규 입사자 온보딩",
+          description: "반복적인 교육 시간을 줄이고 체계적인 가이드를 제공하세요.",
+          icon: "👋",
+        },
+        {
+          item_id: 2,
+          title: "소프트웨어 매뉴얼",
+          description: "복잡한 소프트웨어 사용법을 영상과 문서로 설명하세요.",
+          icon: "💻",
+        },
+        {
+          item_id: 3,
+          title: "고객 응대 가이드",
+          description: "표준화된 응대 매뉴얼로 서비스 품질을 높이세요.",
+          icon: "🎧",
+        },
+        {
+          item_id: 4,
+          title: "내부 시스템 교육",
+          description: "사내 시스템 사용법을 쉽고 빠르게 전파하세요.",
+          icon: "🏢",
+        },
+      ],
+    },
+    cta: {
+      title: "지금 바로 시작해보세요",
+      description: "로그인 없이 데모로 먼저 체험해보거나, 무료 플랜으로 시작할 수 있습니다",
+    },
+  };
 
-  const defaultContent = {
-    hero: {},
-    how_it_works: { items: [] },
-    key_features: { items: [] },
-    use_cases: { items: [] },
-    cta: {},
-  } as any;
-
-  try {
-    const { getServicePageContent } = await import("../queries.server");
-    const content = await getServicePageContent();
-    return { flags, content };
-  } catch (e) {
-    console.error("[Service] Failed to load service page content from DB", e);
-    return { flags, content: defaultContent };
-  }
+  return { flags, content };
 }
 
 export default function Service({ loaderData }: Route.ComponentProps) {

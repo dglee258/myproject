@@ -9,7 +9,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const [client] = makeServerClient(request);
   const {
     data: { user },
-  } = await client.auth.getUser();
+  } = await client.auth.getUser().catch(() => ({ data: { user: null } }));
   if (user) {
     throw redirect("/work/business-logic");
   }

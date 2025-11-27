@@ -18,13 +18,58 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  // DB에서 가격 플랜 로드
-  const { getPricingPlans } = await import("../queries.server");
-  const plans = await getPricingPlans();
+  // Hardcoded pricing plans
+  const plans = [
+    {
+      plan_id: 1,
+      name: "Free",
+      description: "개인 및 소규모 팀을 위한 기본 플랜",
+      price_monthly: 0,
+      price_yearly: 0,
+      is_popular: false,
+      features: [
+        { feature_id: 1, feature_name: "월 5개 영상 분석", feature_value: "" },
+        { feature_id: 2, feature_name: "기본 문서 내보내기 (PDF)", feature_value: "" },
+        { feature_id: 3, feature_name: "이메일 지원", feature_value: "" },
+      ],
+    },
+    {
+      plan_id: 2,
+      name: "Pro",
+      description: "성장하는 팀을 위한 고급 기능",
+      price_monthly: 29000,
+      price_yearly: 290000,
+      is_popular: true,
+      is_coming_soon: true,
+      features: [
+        { feature_id: 4, feature_name: "무제한 영상 분석", feature_value: "" },
+        { feature_id: 5, feature_name: "고급 문서 내보내기 (Notion, HTML)", feature_value: "" },
+        { feature_id: 6, feature_name: "우선 기술 지원", feature_value: "" },
+        { feature_id: 7, feature_name: "팀 공유 및 협업", feature_value: "" },
+      ],
+    },
+    {
+      plan_id: 3,
+      name: "Enterprise",
+      description: "대규모 조직을 위한 맞춤형 솔루션",
+      price_monthly: 99000,
+      price_yearly: 990000,
+      is_popular: false,
+      is_coming_soon: true,
+      features: [
+        { feature_id: 8, feature_name: "전담 매니저 배정", feature_value: "" },
+        { feature_id: 9, feature_name: "SSO 및 보안 강화", feature_value: "" },
+        { feature_id: 10, feature_name: "API 액세스", feature_value: "" },
+        { feature_id: 11, feature_name: "맞춤형 온보딩", feature_value: "" },
+      ],
+    },
+  ];
   
-  // Feature flags 조회
-  const { getFeatureFlags } = await import("~/core/features/queries.server");
-  const flags = await getFeatureFlags(["signup", "contact"]);
+  // Hardcoded feature flags
+  const flags = {
+    signup: { isEnabled: true, disabledMessage: "" },
+    contact: { isEnabled: true, disabledMessage: "" },
+  };
   
   return { plans, flags };
 }
@@ -60,13 +105,19 @@ export default function Pricing({ loaderData }: Route.ComponentProps) {
               plan.is_popular
                 ? "border-primary shadow-primary/20 border-2 shadow-xl"
                 : ""
-            }`}
+            } ${plan.is_coming_soon ? "opacity-80" : ""}`}
           >
             {plan.is_popular && (
               <div className="absolute right-4 top-4">
-                <Badge className="gap-1">
-                  <Sparkles className="size-3" />
-                  인기
+                 <Badge variant="secondary" className="gap-1">
+                  준비 중
+                </Badge>
+              </div>
+            )}
+            {plan.is_coming_soon && !plan.is_popular && (
+               <div className="absolute right-4 top-4">
+                <Badge variant="secondary" className="gap-1">
+                  준비 중
                 </Badge>
               </div>
             )}
@@ -106,7 +157,16 @@ export default function Pricing({ loaderData }: Route.ComponentProps) {
             </div>
 
             <div className="mb-8">
-              {plan.name === "Free" ? (
+              {plan.is_coming_soon ? (
+                <Button
+                  size="lg"
+                  className="w-full"
+                  variant="outline"
+                  disabled
+                >
+                  추후 공개 예정
+                </Button>
+              ) : plan.name === "Free" ? (
                 // 무료 플랜 - 회원가입
                 flags.signup?.isEnabled ? (
                   <Link to="/join">
@@ -130,28 +190,15 @@ export default function Pricing({ loaderData }: Route.ComponentProps) {
                   </Button>
                 )
               ) : (
-                // Pro/Enterprise 플랜 - 문의하기
-                flags.contact?.isEnabled ? (
-                  <Link to="/contact">
-                    <Button
-                      size="lg"
-                      className="w-full"
-                      variant={plan.is_popular ? "default" : "outline"}
-                    >
-                      문의하기
-                    </Button>
-                  </Link>
-                ) : (
-                  <Button
+                // Fallback for other active plans
+                 <Button
                     size="lg"
                     className="w-full"
                     variant={plan.is_popular ? "default" : "outline"}
                     disabled
-                    title={flags.contact?.disabledMessage}
                   >
-                    {flags.contact?.disabledMessage || "추후 공개 예정"}
+                    준비 중
                   </Button>
-                )
               )}
             </div>
 
@@ -183,8 +230,8 @@ export default function Pricing({ loaderData }: Route.ComponentProps) {
         </p>
         {flags.contact?.isEnabled ? (
           <Link to="/contact">
-            <Button variant="outline" size="lg">
-              문의하기
+            <Button variant="outline" size="lg" disabled>
+              추후 공개
             </Button>
           </Link>
         ) : (

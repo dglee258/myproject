@@ -48,6 +48,7 @@ import {
   Layout,
   List,
   Settings,
+  Users,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -317,6 +318,8 @@ interface VideoAnalysis {
   thumbnail: string;
   videoUrl?: string;
   steps: LogicStep[];
+  teamId?: string;
+  teamName?: string;
 }
 
 interface LogicStep {
@@ -787,10 +790,31 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
               screenshot_url: step.screenshot_url || undefined,
               notes: step.notes || undefined,
             })),
+          teamId: workflow.team_id || undefined,
+          teamName: workflow.team?.name || undefined,
         };
       }),
     [dbWorkflows],
   );
+
+  const [selectedTeamId, setSelectedTeamId] = useState<string>("all");
+
+  // Get unique teams from workflows
+  const uniqueTeams = useMemo(() => {
+    const teams = new Map<string, string>();
+    mockVideos.forEach((video) => {
+      if (video.teamId && video.teamName) {
+        teams.set(video.teamId, video.teamName);
+      }
+    });
+    return Array.from(teams.entries()).map(([id, name]) => ({ id, name }));
+  }, [mockVideos]);
+
+  // Filter videos based on selected team
+  const filteredVideos = useMemo(() => {
+    if (selectedTeamId === "all") return mockVideos;
+    return mockVideos.filter((video) => video.teamId === selectedTeamId);
+  }, [mockVideos, selectedTeamId]);
 
   const [selectedVideo, setSelectedVideo] = useState<VideoAnalysis | null>(
     mockVideos[0] || null,
@@ -1256,9 +1280,63 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
         </Button>
       </div>
 
+      <div className="px-6 pb-4">
+        <div className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          팀 필터
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              className="w-full justify-between border-slate-200 bg-white/50 hover:bg-white hover:text-indigo-600 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:bg-slate-900 dark:hover:text-indigo-400"
+            >
+              <div className="flex items-center gap-2 truncate">
+                <Users className="size-4 text-slate-500" />
+                <span className="truncate">
+                  {selectedTeamId === "all"
+                    ? "전체 보기"
+                    : uniqueTeams.find((t) => t.id === selectedTeamId)?.name ||
+                      "팀 선택"}
+                </span>
+              </div>
+              <ChevronDown className="size-4 opacity-50" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-64" align="start">
+            <DropdownMenuItem
+              onClick={() => setSelectedTeamId("all")}
+              className="gap-2"
+            >
+              <div className="flex size-6 items-center justify-center rounded bg-slate-100 dark:bg-slate-800">
+                <List className="size-3.5" />
+              </div>
+              <span className="flex-1">전체 보기</span>
+              {selectedTeamId === "all" && (
+                <CheckCircle2 className="size-4 text-indigo-600" />
+              )}
+            </DropdownMenuItem>
+            {uniqueTeams.map((team) => (
+              <DropdownMenuItem
+                key={team.id}
+                onClick={() => setSelectedTeamId(team.id)}
+                className="gap-2"
+              >
+                <div className="flex size-6 items-center justify-center rounded bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
+                  <Users className="size-3.5" />
+                </div>
+                <span className="flex-1 truncate">{team.name}</span>
+                {selectedTeamId === team.id && (
+                  <CheckCircle2 className="size-4 text-indigo-600" />
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       <div className="flex-1 overflow-y-auto px-4 pb-4">
         <div className="space-y-2">
-          {mockVideos.map((video) => (
+          {filteredVideos.map((video) => (
             <div
               key={video.id}
               onClick={() => {
@@ -1280,8 +1358,10 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <FileVideo className="size-6 text-slate-400" />
+                    <div className="flex h-full w-full items-center justify-center bg-slate-100 dark:bg-slate-800">
+                      <div className="rounded-full bg-white/80 p-1.5 shadow-sm dark:bg-slate-700/80">
+                        <Play className="size-3 fill-slate-900 text-slate-900 dark:fill-slate-100 dark:text-slate-100" />
+                      </div>
                     </div>
                   )}
                   <div className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[10px] text-white">
@@ -1382,8 +1462,10 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                               className="h-full w-full object-cover"
                             />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center">
-                              <FileVideo className="size-8 text-slate-500" />
+                            <div className="flex h-full w-full items-center justify-center bg-slate-100 dark:bg-slate-800">
+                              <div className="rounded-full bg-white/80 p-3 shadow-sm dark:bg-slate-700/80">
+                                <Play className="size-6 fill-slate-900 text-slate-900 dark:fill-slate-100 dark:text-slate-100" />
+                              </div>
                             </div>
                           )}
                           <div 

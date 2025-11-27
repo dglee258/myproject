@@ -72,26 +72,28 @@ function UserMenu({
     <DropdownMenu>
       {/* Avatar as the dropdown trigger */}
       <DropdownMenuTrigger asChild>
-        <Avatar className="size-8 cursor-pointer rounded-lg">
+        <Avatar className="size-10 cursor-pointer rounded-full border-2 border-white shadow-sm transition-transform hover:scale-105 dark:border-slate-700">
           <AvatarImage src={avatarUrl ?? undefined} />
-          <AvatarFallback>{name.slice(0, 2)}</AvatarFallback>
+          <AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
+            {name.slice(0, 2)}
+          </AvatarFallback>
         </Avatar>
       </DropdownMenuTrigger>
 
       {/* Dropdown content with user info and actions */}
-      <DropdownMenuContent className="w-56">
+      <DropdownMenuContent className="w-60 rounded-2xl border-slate-200/60 bg-white/90 p-2 shadow-xl backdrop-blur-xl dark:border-slate-800/60 dark:bg-slate-900/90" align="end">
         {/* User information display */}
-        <DropdownMenuLabel className="grid flex-1 text-left text-sm leading-tight">
-          <span className="truncate font-semibold">{name}</span>
-          <span className="truncate text-xs">{email}</span>
+        <DropdownMenuLabel className="grid flex-1 px-3 py-2 text-left text-sm leading-tight">
+          <span className="truncate font-bold text-slate-900 dark:text-slate-100">{name}</span>
+          <span className="truncate text-xs text-slate-500 dark:text-slate-400">{email}</span>
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator className="my-1 bg-slate-200 dark:bg-slate-700" />
 
         {/* Dashboard link */}
-        <DropdownMenuItem asChild>
+        <DropdownMenuItem asChild className="rounded-xl focus:bg-slate-100 dark:focus:bg-slate-800">
           <SheetClose asChild>
-            <Link to="/work/business-logic" viewTransition>
-              <Button variant="ghost" size="sm">
+            <Link to="/work/business-logic" viewTransition className="cursor-pointer">
+              <Button variant="ghost" size="sm" className="h-auto w-full justify-start px-3 py-2 text-base font-medium text-slate-700 dark:text-slate-300">
                 Dashboard
               </Button>
             </Link>
@@ -99,10 +101,10 @@ function UserMenu({
         </DropdownMenuItem>
 
         {/* Logout link */}
-        <DropdownMenuItem asChild>
+        <DropdownMenuItem asChild className="rounded-xl focus:bg-red-50 dark:focus:bg-red-950/30">
           <SheetClose asChild>
-            <Link to="/logout" viewTransition>
-              <LogOutIcon className="size-4" />
+            <Link to="/logout" viewTransition className="cursor-pointer px-3 py-2 text-base font-medium text-red-600 dark:text-red-400">
+              <LogOutIcon className="mr-2 size-4" />
               Log out
             </Link>
           </SheetClose>
@@ -131,19 +133,19 @@ function AuthButtons() {
   return (
     <>
       {/* Sign in button (less prominent) */}
-      <Button variant="ghost" asChild>
+      <Button variant="ghost" asChild className="rounded-full px-6 text-base font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100">
         <SheetClose asChild>
           <Link to="/login" viewTransition>
-            Sign in
+            Login
           </Link>
         </SheetClose>
       </Button>
 
       {/* Sign up button (more prominent) */}
-      <Button variant="default" asChild>
+      <Button className="rounded-full bg-indigo-600 px-7 py-5 text-base font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 dark:bg-indigo-500 dark:hover:bg-indigo-400" asChild>
         <SheetClose asChild>
           <Link to="/join" viewTransition>
-            Sign up
+            Join
           </Link>
         </SheetClose>
       </Button>
@@ -241,52 +243,66 @@ export function NavigationBar({
   return (
     <nav
       className={
-        "mx-auto flex h-16 w-full items-center justify-between border-b px-5 shadow-xs backdrop-blur-lg transition-opacity md:px-10"
+        "sticky top-0 z-50 mx-auto flex h-24 w-full items-center justify-between px-6 transition-all md:px-12"
       }
     >
-      <div className="mx-auto flex h-full w-full max-w-screen-2xl items-center justify-between py-3">
+      {/* Glassmorphism Background Container */}
+      <div className="absolute inset-x-6 top-6 bottom-0 -z-10 rounded-3xl border border-white/40 bg-white/70 shadow-xl shadow-slate-200/20 backdrop-blur-2xl dark:border-slate-800/40 dark:bg-slate-900/70 dark:shadow-slate-900/20" />
+
+      <div className="mx-auto flex h-full w-full max-w-screen-2xl items-center justify-between">
         {/* Left: Application logo/title with link to home */}
-        <div className="flex-1">
-          <Link to="/">
-            <h1 className="text-lg font-extrabold">{t("home.title")}</h1>
+        <div className="flex-1 pl-4">
+          <Link to="/" className="group flex items-center gap-2">
+            {/* UI 개선: 로고 이미지 블렌딩 모드 적용 및 크기 조정 */}
+            <div className="mb-10 flex justify-center pt-6">
+  <img 
+    src="/logo.png" 
+    alt="Synchro" 
+    className="h-16 w-auto object-contain"
+    style={{
+      filter: 'brightness(1.1) contrast(1.1)',
+      mixBlendMode: 'darken'
+    }}
+  />
+</div>
           </Link>
         </div>
 
         {/* Center: Main navigation links (hidden on mobile) */}
-        <div className="hidden h-full flex-1 items-center justify-center gap-8 md:flex">
+        <div className="hidden h-full flex-1 items-center justify-center gap-12 md:flex">
           <Link
             to="/service"
             viewTransition
-            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+            className="text-base font-semibold text-slate-600 transition-colors hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400"
           >
             서비스
           </Link>
           <Link
             to="/pricing"
             viewTransition
-            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+            className="text-base font-semibold text-slate-600 transition-colors hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400"
           >
             가격
           </Link>
           <Link
             to="/demo"
             viewTransition
-            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+            className="text-base font-semibold text-slate-600 transition-colors hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400"
           >
             체험하기
           </Link>
         </div>
 
         {/* Right: Settings, theme, language, and user menu (hidden on mobile) */}
-        <div className="hidden h-full flex-1 items-center justify-end gap-5 md:flex">
+        <div className="hidden h-full flex-1 items-center justify-end gap-6 pr-4 md:flex">
           {/* Settings, theme switcher, and language switcher */}
           <Actions />
-          <Separator orientation="vertical" />
+          
           {/* Conditional rendering based on authentication state */}
           {loading ? (
             // Loading state with skeleton placeholder
             <div className="flex items-center">
-              <div className="bg-muted-foreground/20 size-8 animate-pulse rounded-lg" />
+              <div className="bg-slate-200 dark:bg-slate-800 size-10 animate-pulse rounded-full" />
             </div>
           ) : (
             <>
@@ -302,46 +318,46 @@ export function NavigationBar({
         </div>
 
         {/* Mobile menu trigger (hidden on desktop) */}
-        <SheetTrigger className="size-6 md:hidden">
-          <MenuIcon />
+        <SheetTrigger className="pr-4 text-slate-600 md:hidden dark:text-slate-400">
+          <MenuIcon className="size-7" />
         </SheetTrigger>
-        <SheetContent>
+        <SheetContent className="border-l border-white/20 bg-white/80 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/80">
           <SheetHeader>
+             <div className="mb-10 flex justify-center pt-6">
+                <img src="/logo.png" alt="Synchro" className="h-12 w-auto object-contain mix-blend-multiply dark:mix-blend-normal" />
+             </div>
             <SheetClose asChild>
-              <Link to="/service">서비스</Link>
+              <Link to="/service" className="block rounded-xl px-6 py-4 text-xl font-semibold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-indigo-400">서비스</Link>
             </SheetClose>
             <SheetClose asChild>
-              <Link to="/pricing">가격</Link>
+              <Link to="/pricing" className="block rounded-xl px-6 py-4 text-xl font-semibold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-indigo-400">가격</Link>
             </SheetClose>
             <SheetClose asChild>
-              <Link to="/demo">체험하기</Link>
+              <Link to="/demo" className="block rounded-xl px-6 py-4 text-xl font-semibold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-indigo-400">체험하기</Link>
             </SheetClose>
-            {/* <SheetClose asChild>
-              <Link to="/contact">문의하기</Link>
-            </SheetClose> */}
           </SheetHeader>
           {loading ? (
-            <div className="flex items-center">
-              <div className="bg-muted-foreground h-4 w-24 animate-pulse rounded-full" />
+            <div className="flex items-center justify-center mt-10">
+              <div className="bg-slate-200 dark:bg-slate-800 h-5 w-32 animate-pulse rounded-full" />
             </div>
           ) : (
-            <SheetFooter>
+            <SheetFooter className="mt-auto pb-10 sm:justify-center">
               {name ? (
-                <div className="grid grid-cols-3">
-                  <div className="col-span-2 flex w-full justify-between">
-                    <Actions />
-                  </div>
-                  <div className="flex justify-end">
+                <div className="w-full">
+                  <div className="mb-8 flex justify-center">
                     <UserMenu name={name} email={email} avatarUrl={avatarUrl} />
+                  </div>
+                  <div className="flex justify-center">
+                    <Actions />
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col gap-5">
-                  <div className="flex justify-between">
-                    <Actions />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
+                <div className="flex w-full flex-col gap-5 px-4">
+                  <div className="grid grid-cols-1 gap-4">
                     <AuthButtons />
+                  </div>
+                  <div className="flex justify-center mt-6">
+                    <Actions />
                   </div>
                 </div>
               )}

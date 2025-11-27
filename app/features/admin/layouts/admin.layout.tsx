@@ -20,7 +20,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const [client] = makeServerClient(request);
   const {
     data: { user },
-  } = await client.auth.getUser();
+  } = await client.auth.getUser().catch(() => ({ data: { user: null } }));
 
   if (!user) {
     // 현재 URL을 redirect 파라미터로 포함하여 로그인 페이지로 리디렉션

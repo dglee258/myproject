@@ -26,6 +26,7 @@ export async function getUserWorkflows(userId: string) {
     with: {
       steps: true,
       sourceVideo: true,
+      team: true,
     },
   });
 
@@ -56,6 +57,7 @@ export async function getUserWorkflows(userId: string) {
     with: {
       steps: true,
       sourceVideo: true,
+      team: true,
     },
   });
 

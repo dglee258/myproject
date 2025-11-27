@@ -183,6 +183,10 @@ export const workWorkflowsRelations = relations(
       fields: [workWorkflows.source_video_id],
       references: [workVideos.video_id],
     }),
+    team: one(workTeams, {
+      fields: [workWorkflows.team_id],
+      references: [workTeams.team_id],
+    }),
   }),
 );
 
