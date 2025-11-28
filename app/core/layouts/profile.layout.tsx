@@ -39,7 +39,7 @@ export default function AccountLayout() {
             className="flex items-center gap-2 text-slate-600 hover:bg-slate-100/50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-slate-100"
           >
             <ArrowLeftIcon className="size-4" />
-            <span className="hidden sm:inline">돌아가기</span>
+            <span className="hidden sm:inline">뒤로가기</span>
           </Button>
         </div>
       </header>

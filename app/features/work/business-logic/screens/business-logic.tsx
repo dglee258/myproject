@@ -18,7 +18,6 @@ import {
 } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { AnimatePresence, motion } from "motion/react";
 import {
   AlertCircle,
   ArrowRight,
@@ -33,7 +32,10 @@ import {
   FileVideo,
   GripVertical,
   Image as ImageIcon,
+  Layout,
   Lightbulb,
+  List,
+  ListChecks,
   Loader2,
   Maximize,
   Menu,
@@ -41,15 +43,14 @@ import {
   Play,
   Plus,
   Save,
+  Settings,
   Sparkles,
   Trash2,
+  Users,
   Volume2,
   X,
-  Layout,
-  List,
-  Settings,
-  Users,
 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Link,
@@ -180,7 +181,10 @@ export async function action({ request }: Route.ActionArgs) {
       const { updateStepNotes } = await import("../queries.server");
       await updateStepNotes(stepId, notes || "");
 
-      return data({ success: true, message: "메모가 저장되었습니다" }, { headers });
+      return data(
+        { success: true, message: "메모가 저장되었습니다" },
+        { headers },
+      );
     } else if (actionType === "updateStep") {
       const stepId = parseInt(formData.get("stepId") as string);
       const action = formData.get("action") as string;
@@ -194,7 +198,10 @@ export async function action({ request }: Route.ActionArgs) {
       const { updateStepDetails } = await import("../queries.server");
       await updateStepDetails(stepId, action, description);
 
-      return data({ success: true, message: "스텝이 수정되었습니다" }, { headers });
+      return data(
+        { success: true, message: "스텝이 수정되었습니다" },
+        { headers },
+      );
     } else if (actionType === "deleteStep") {
       const stepId = parseInt(formData.get("stepId") as string);
 
@@ -206,7 +213,10 @@ export async function action({ request }: Route.ActionArgs) {
       const { deleteStep } = await import("../queries.server");
       await deleteStep(stepId);
 
-      return data({ success: true, message: "스텝이 삭제되었습니다" }, { headers });
+      return data(
+        { success: true, message: "스텝이 삭제되었습니다" },
+        { headers },
+      );
     } else if (actionType === "updateStepType") {
       const stepId = parseInt(formData.get("stepId") as string);
       const type = formData.get("type") as string;
@@ -219,7 +229,10 @@ export async function action({ request }: Route.ActionArgs) {
       const { updateStepType } = await import("../queries.server");
       await updateStepType(stepId, type);
 
-      return data({ success: true, message: "단계 유형이 수정되었습니다" }, { headers });
+      return data(
+        { success: true, message: "단계 유형이 수정되었습니다" },
+        { headers },
+      );
     } else if (actionType === "reorderSteps") {
       const workflowId = parseInt(formData.get("workflowId") as string);
       const stepIds = JSON.parse(formData.get("stepIds") as string) as number[];
@@ -232,7 +245,10 @@ export async function action({ request }: Route.ActionArgs) {
       const { reorderSteps } = await import("../queries.server");
       await reorderSteps(workflowId, stepIds);
 
-      return data({ success: true, message: "단계 순서가 변경되었습니다" }, { headers });
+      return data(
+        { success: true, message: "단계 순서가 변경되었습니다" },
+        { headers },
+      );
     } else if (actionType === "addStep") {
       const workflowId = parseInt(formData.get("workflowId") as string);
       const sequenceNo = parseInt(formData.get("sequenceNo") as string);
@@ -252,7 +268,10 @@ export async function action({ request }: Route.ActionArgs) {
         description || "",
       );
 
-      return data({ success: true, message: "새 단계가 추가되었습니다" }, { headers });
+      return data(
+        { success: true, message: "새 단계가 추가되었습니다" },
+        { headers },
+      );
     } else if (actionType === "uploadScreenshot") {
       const stepId = parseInt(formData.get("stepId") as string);
       const file = formData.get("file") as File;
@@ -272,7 +291,10 @@ export async function action({ request }: Route.ActionArgs) {
 
       if (uploadError) {
         console.error("Upload error:", uploadError);
-        return data({ error: "Failed to upload image" }, { status: 500, headers });
+        return data(
+          { error: "Failed to upload image" },
+          { status: 500, headers },
+        );
       }
 
       // Get Public URL
@@ -284,7 +306,10 @@ export async function action({ request }: Route.ActionArgs) {
       const { updateStepScreenshot } = await import("../queries.server");
       await updateStepScreenshot(stepId, publicUrl);
 
-      return data({ success: true, message: "스크린샷이 업로드되었습니다" }, { headers });
+      return data(
+        { success: true, message: "스크린샷이 업로드되었습니다" },
+        { headers },
+      );
     } else if (actionType === "deleteScreenshot") {
       const stepId = parseInt(formData.get("stepId") as string);
 
@@ -299,13 +324,19 @@ export async function action({ request }: Route.ActionArgs) {
       // Note: We are not deleting the file from storage to keep it simple and avoid permission issues,
       // but in a real app you might want to delete it.
 
-      return data({ success: true, message: "스크린샷이 삭제되었습니다" }, { headers });
+      return data(
+        { success: true, message: "스크린샷이 삭제되었습니다" },
+        { headers },
+      );
     }
 
     return data({ error: "Invalid action type" }, { status: 400, headers });
   } catch (error) {
     console.error("Action error:", error);
-    return data({ error: "Failed to process request" }, { status: 500, headers });
+    return data(
+      { error: "Failed to process request" },
+      { status: 500, headers },
+    );
   }
 }
 
@@ -501,11 +532,13 @@ function DemoStyleStep({
       >
         <div className="p-4">
           <div className="flex items-start gap-4">
-            <div className={`flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-sm transition-colors ${
-              isEditMode 
-                ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300" 
-                : "bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-            }`}>
+            <div
+              className={`flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-sm transition-colors ${
+                isEditMode
+                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300"
+                  : "bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+              }`}
+            >
               {index + 1}
             </div>
 
@@ -523,7 +556,9 @@ function DemoStyleStep({
                       className="h-8 border-indigo-200 font-medium focus:border-indigo-500 dark:border-indigo-800"
                     />
                   ) : (
-                    <h4 className="font-semibold text-slate-900 dark:text-slate-100">{currentAction}</h4>
+                    <h4 className="font-semibold text-slate-900 dark:text-slate-100">
+                      {currentAction}
+                    </h4>
                   )}
                 </div>
                 {isEditMode && (
@@ -584,7 +619,10 @@ function DemoStyleStep({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
-                  <Badge variant="outline" className={`${getStepColor(step.type)} border-0`}>
+                  <Badge
+                    variant="outline"
+                    className={`${getStepColor(step.type)} border-0`}
+                  >
                     {step.type === "click" && "클릭"}
                     {step.type === "input" && "입력"}
                     {step.type === "navigate" && "이동"}
@@ -600,7 +638,7 @@ function DemoStyleStep({
 
               <AnimatePresence>
                 {(isExpanded || isEditMode) && (
-                  <motion.div 
+                  <motion.div
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
@@ -644,7 +682,11 @@ function DemoStyleStep({
                                   className="h-8 w-8 shadow-md"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (confirm("정말로 이 스크린샷을 삭제하시겠습니까?")) {
+                                    if (
+                                      confirm(
+                                        "정말로 이 스크린샷을 삭제하시겠습니까?",
+                                      )
+                                    ) {
                                       handleDeleteScreenshot(step.id);
                                     }
                                   }}
@@ -656,7 +698,7 @@ function DemoStyleStep({
                           </div>
                         ) : (
                           isEditMode && (
-                            <div 
+                            <div
                               className="flex aspect-video cursor-pointer flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800"
                               onClick={() => fileInputRef.current?.click()}
                             >
@@ -771,7 +813,11 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
           duration: formatDuration(workflow.duration_seconds),
           uploadDate: formatDate(workflow.created_at),
           status: workflow.status as "analyzed" | "analyzing" | "pending",
-          thumbnail: (workflow.thumbnail_url && workflow.thumbnail_url !== "/placeholder-video.jpg") ? workflow.thumbnail_url : "",
+          thumbnail:
+            workflow.thumbnail_url &&
+            workflow.thumbnail_url !== "/placeholder-video.jpg"
+              ? workflow.thumbnail_url
+              : "",
           videoUrl,
           steps: (workflow.steps || [])
             .sort((a: any, b: any) => a.sequence_no - b.sequence_no)
@@ -833,8 +879,12 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   const originalVideoRef = useRef<VideoAnalysis | null>(null);
 
   // Optimistic UI states for screenshots
-  const [pendingUploads, setPendingUploads] = useState<Map<number, File>>(new Map());
-  const [pendingScreenshotDeletes, setPendingScreenshotDeletes] = useState<Set<number>>(new Set());
+  const [pendingUploads, setPendingUploads] = useState<Map<number, File>>(
+    new Map(),
+  );
+  const [pendingScreenshotDeletes, setPendingScreenshotDeletes] = useState<
+    Set<number>
+  >(new Set());
 
   const [mounted, setMounted] = useState(false);
 
@@ -929,18 +979,18 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   const handleUploadScreenshot = (stepId: number, file: File) => {
     // Create preview URL
     const previewUrl = URL.createObjectURL(file);
-    
+
     // Update UI immediately
     if (selectedVideo) {
-      const updatedSteps = selectedVideo.steps.map(step => 
-        step.id === stepId ? { ...step, screenshot_url: previewUrl } : step
+      const updatedSteps = selectedVideo.steps.map((step) =>
+        step.id === stepId ? { ...step, screenshot_url: previewUrl } : step,
       );
       setSelectedVideo({ ...selectedVideo, steps: updatedSteps });
     }
 
     // Add to pending uploads
-    setPendingUploads(prev => new Map(prev).set(stepId, file));
-    
+    setPendingUploads((prev) => new Map(prev).set(stepId, file));
+
     // Remove from pending deletes if it was there
     if (pendingScreenshotDeletes.has(stepId)) {
       const newDeletes = new Set(pendingScreenshotDeletes);
@@ -952,15 +1002,15 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   const handleDeleteScreenshot = (stepId: number) => {
     // Update UI immediately
     if (selectedVideo) {
-      const updatedSteps = selectedVideo.steps.map(step => 
-        step.id === stepId ? { ...step, screenshot_url: undefined } : step
+      const updatedSteps = selectedVideo.steps.map((step) =>
+        step.id === stepId ? { ...step, screenshot_url: undefined } : step,
       );
       setSelectedVideo({ ...selectedVideo, steps: updatedSteps });
     }
 
     // Add to pending deletes
-    setPendingScreenshotDeletes(prev => new Set(prev).add(stepId));
-    
+    setPendingScreenshotDeletes((prev) => new Set(prev).add(stepId));
+
     // Remove from pending uploads if it was there
     if (pendingUploads.has(stepId)) {
       const newUploads = new Map(pendingUploads);
@@ -968,8 +1018,6 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
       setPendingUploads(newUploads);
     }
   };
-
-
 
   const handleEditProcess = () => {
     if (!isEditMode) {
@@ -1025,7 +1073,10 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
         const formData = new FormData();
         formData.append("actionType", "addStep");
         formData.append("workflowId", selectedVideo.id);
-        formData.append("sequenceNo", (selectedVideo.steps.length + index + 1).toString());
+        formData.append(
+          "sequenceNo",
+          (selectedVideo.steps.length + index + 1).toString(),
+        );
         formData.append("action", step.action);
         formData.append("description", step.description);
         fetcher.submit(formData, { method: "post" });
@@ -1051,14 +1102,14 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
           formData.append("description", data.description);
           fetcher.submit(formData, { method: "post" });
         }
-        
+
         // Type update check
         if (data.type && originalStep && originalStep.type !== data.type) {
-             const formData = new FormData();
-             formData.append("actionType", "updateStepType");
-             formData.append("stepId", stepId.toString());
-             formData.append("type", data.type);
-             fetcher.submit(formData, { method: "post" });
+          const formData = new FormData();
+          formData.append("actionType", "updateStepType");
+          formData.append("stepId", stepId.toString());
+          formData.append("type", data.type);
+          fetcher.submit(formData, { method: "post" });
         }
       });
 
@@ -1068,7 +1119,10 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
         formData.append("actionType", "uploadScreenshot");
         formData.append("stepId", stepId.toString());
         formData.append("file", file);
-        fetcher.submit(formData, { method: "post", encType: "multipart/form-data" });
+        fetcher.submit(formData, {
+          method: "post",
+          encType: "multipart/form-data",
+        });
       });
 
       // Process screenshot deletes
@@ -1158,30 +1212,30 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
   };
 
   const handleTypeChange = (stepId: number, newType: string) => {
-      if (!selectedVideo) return;
+    if (!selectedVideo) return;
 
-      const updatedSteps = selectedVideo.steps.map((step) =>
-        step.id === stepId ? { ...step, type: newType as any } : step,
+    const updatedSteps = selectedVideo.steps.map((step) =>
+      step.id === stepId ? { ...step, type: newType as any } : step,
+    );
+    setSelectedVideo({ ...selectedVideo, steps: updatedSteps });
+
+    const currentEdit = editedSteps.get(stepId) || {
+      action: "",
+      description: "",
+    };
+    const step = selectedVideo.steps.find((s) => s.id === stepId);
+    if (step) {
+      setEditedSteps(
+        new Map(
+          editedSteps.set(stepId, {
+            ...currentEdit,
+            type: newType,
+            action: currentEdit.action || step.action,
+            description: currentEdit.description || step.description,
+          }),
+        ),
       );
-      setSelectedVideo({ ...selectedVideo, steps: updatedSteps });
-
-      const currentEdit = editedSteps.get(stepId) || {
-        action: "",
-        description: "",
-      };
-      const step = selectedVideo.steps.find((s) => s.id === stepId);
-      if (step) {
-        setEditedSteps(
-          new Map(
-            editedSteps.set(stepId, {
-              ...currentEdit,
-              type: newType,
-              action: currentEdit.action || step.action,
-              description: currentEdit.description || step.description,
-            }),
-          ),
-        );
-      }
+    }
   };
 
   const handleDeleteStep = (stepId: number) => {
@@ -1256,7 +1310,7 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
 
   const handleDeleteWorkflow = () => {
     if (!workflowToDelete) return;
-    
+
     // TODO: Implement actual delete logic via action/fetcher if needed
     // Currently just hiding from UI for demo
     toast.success("워크플로우가 삭제되었습니다");
@@ -1271,11 +1325,17 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
           <div className="flex size-8 items-center justify-center rounded-lg bg-indigo-600 text-white">
             <Bot className="size-5" />
           </div>
-          <span className="text-lg font-bold text-slate-900 dark:text-slate-100">Workflows</span>
+          <span className="text-lg font-bold text-slate-900 dark:text-slate-100">
+            업무 프로세스
+          </span>
         </div>
-        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400" asChild>
+        <Button
+          className="w-full bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+          asChild
+        >
           <Link to="/work/upload">
-            <Plus className="mr-2 size-4" />새 분석 시작
+            <Plus className="mr-2 size-4" />
+            업로드
           </Link>
         </Button>
       </div>
@@ -1364,16 +1424,18 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                       </div>
                     </div>
                   )}
-                  <div className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[10px] text-white">
+                  <div className="absolute right-1 bottom-1 rounded bg-black/60 px-1 py-0.5 text-[10px] text-white">
                     {video.duration}
                   </div>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h4 className={`truncate text-sm font-medium ${
-                    selectedVideo?.id === video.id 
-                      ? "text-indigo-900 dark:text-indigo-100" 
-                      : "text-slate-700 dark:text-slate-300"
-                  }`}>
+                  <h4
+                    className={`truncate text-sm font-medium ${
+                      selectedVideo?.id === video.id
+                        ? "text-indigo-900 dark:text-indigo-100"
+                        : "text-slate-700 dark:text-slate-300"
+                    }`}
+                  >
                     {video.title}
                   </h4>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -1407,11 +1469,12 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
     <div className="min-h-[calc(100vh-4rem)] w-full bg-slate-50/50 dark:bg-slate-950/50">
       {/* Rate Limit Warning */}
       {rateLimitWarning && (
-        <Alert variant="destructive" className="mx-auto max-w-2xl mt-4">
+        <Alert variant="destructive" className="mx-auto mt-4 max-w-2xl">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>알림</AlertTitle>
           <AlertDescription>
-            사용량이 많아 일부 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
+            사용량이 많아 일부 데이터를 불러오지 못했습니다. 잠시 후 다시
+            시도해주세요.
           </AlertDescription>
         </Alert>
       )}
@@ -1426,17 +1489,20 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Mobile Header */}
           <div className="flex items-center justify-between border-b border-slate-200 bg-white/40 px-4 py-3 backdrop-blur-xl lg:hidden dark:border-slate-800 dark:bg-slate-900/40">
-            <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
+            <Sheet
+              open={isMobileSidebarOpen}
+              onOpenChange={setIsMobileSidebarOpen}
+            >
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon">
                   <Menu className="size-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="p-0 w-80">
+              <SheetContent side="left" className="w-80 p-0">
                 <SidebarContent />
               </SheetContent>
             </Sheet>
-            <span className="font-semibold">Business Logic</span>
+            <span className="font-semibold"></span>
             <div className="w-9" /> {/* Spacer */}
           </div>
 
@@ -1468,7 +1534,7 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                               </div>
                             </div>
                           )}
-                          <div 
+                          <div
                             className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/30 opacity-0 transition-opacity hover:opacity-100"
                             onClick={() => setIsVideoPlayerOpen(true)}
                           >
@@ -1506,7 +1572,7 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                             >
                               취소
                             </Button>
-                            <Button 
+                            <Button
                               onClick={handleEditProcess}
                               className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
                             >
@@ -1518,13 +1584,15 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                           <>
                             <Button
                               variant="outline"
-                              onClick={() => setWorkflowToDelete(selectedVideo.id)}
+                              onClick={() =>
+                                setWorkflowToDelete(selectedVideo.id)
+                              }
                               className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/30"
                             >
                               <Trash2 className="mr-2 size-4" />
                               삭제
                             </Button>
-                            <Button 
+                            <Button
                               onClick={handleEditProcess}
                               className="bg-white text-slate-900 shadow-sm hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
                             >
@@ -1540,12 +1608,13 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                   {/* Steps List */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between px-2">
-                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                        Process Steps
+                      <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        <ListChecks className="size-5 text-indigo-600 dark:text-indigo-400" />
+                        추출된 업무 로직
                       </h3>
                       {isEditMode && (
-                        <Button 
-                          onClick={handleAddStep} 
+                        <Button
+                          onClick={handleAddStep}
                           size="sm"
                           className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
                         >
@@ -1598,7 +1667,6 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                         </div>
                       </SortableContext>
                     </DndContext>
-
                   </div>
                 </motion.div>
               ) : (
@@ -1610,11 +1678,16 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
                     선택된 워크플로우가 없습니다
                   </h3>
                   <p className="mt-2 text-slate-500 dark:text-slate-400">
-                    왼쪽 목록에서 분석 결과를 선택하거나 새로운 영상을 업로드하세요.
+                    왼쪽 목록에서 분석 결과를 선택하거나 새로운 영상을
+                    업로드하세요.
                   </p>
-                  <Button className="mt-6 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400" asChild>
+                  <Button
+                    className="mt-6 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                    asChild
+                  >
                     <Link to="/work/upload">
-                      <Plus className="mr-2 size-4" />새 분석 시작
+                      <Plus className="mr-2 size-4" />
+                      업로드
                     </Link>
                   </Button>
                 </div>
@@ -1653,26 +1726,34 @@ export default function BusinessLogic({ loaderData }: Route.ComponentProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
+
       {/* Delete Workflow Alert */}
-      <Dialog open={!!workflowToDelete} onOpenChange={(open) => !open && setWorkflowToDelete(null)}>
+      <Dialog
+        open={!!workflowToDelete}
+        onOpenChange={(open) => !open && setWorkflowToDelete(null)}
+      >
         <DialogContent>
-            <DialogHeader>
-                <DialogTitle>워크플로우 삭제</DialogTitle>
-                <DialogDescription>
-                    정말로 이 워크플로우를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
-                </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setWorkflowToDelete(null)}>취소</Button>
-                <Button variant="destructive" onClick={handleDeleteWorkflow}>삭제</Button>
-            </DialogFooter>
+          <DialogHeader>
+            <DialogTitle>워크플로우 삭제</DialogTitle>
+            <DialogDescription>
+              정말로 이 워크플로우를 삭제하시겠습니까? 이 작업은 되돌릴 수
+              없습니다.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWorkflowToDelete(null)}>
+              취소
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteWorkflow}>
+              삭제
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Video Player Dialog */}
       <Dialog open={isVideoPlayerOpen} onOpenChange={setIsVideoPlayerOpen}>
-        <DialogContent className="max-w-4xl p-0 overflow-hidden bg-black border-slate-800">
+        <DialogContent className="max-w-4xl overflow-hidden border-slate-800 bg-black p-0">
           <div className="relative aspect-video w-full">
             {selectedVideo?.videoUrl ? (
               <video

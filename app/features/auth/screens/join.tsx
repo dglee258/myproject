@@ -121,6 +121,7 @@ export async function action({ request }: Route.ActionArgs) {
   const { default: adminClient } = await import(
     "~/core/lib/supa-admin-client.server"
   );
+  const { getSiteUrl } = await import("~/core/lib/utils.server");
 
   // If user exists and is confirmed, return error
   if (userStatus.exists && userStatus.confirmed) {
@@ -132,7 +133,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   // If user exists but NOT confirmed, or doesn't exist, proceed to generate link
   // If unverified, this will effectively resend the verification link
-  
+
   const { data: linkData, error: signUpError } =
     await adminClient.auth.admin.generateLink({
       type: "signup",
@@ -144,12 +145,12 @@ export async function action({ request }: Route.ActionArgs) {
           avatar_url: validData.avatarUrl,
           marketing_consent: validData.marketing,
         },
-        redirectTo: `${process.env.SITE_URL}/auth/confirm?next=${encodeURIComponent("/login?message=email_verified")}`,
+        redirectTo: `${getSiteUrl()}/auth/confirm?next=${encodeURIComponent("/login?message=email_verified")}`,
       },
     });
 
   console.log("Generated Link Data:", linkData);
-  console.log("Redirect URL used:", `${process.env.SITE_URL}/auth/confirm`);
+  console.log("Redirect URL used:", `${getSiteUrl()}/auth/confirm`);
 
   if (signUpError) {
     console.error("Signup error:", signUpError);

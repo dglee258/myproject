@@ -19,11 +19,9 @@ import type { Route } from "./+types/resend";
 import { data } from "react-router";
 import { z } from "zod";
 
-
-
 /**
  * Validation schema for email resend requests
- * 
+ *
  * This schema ensures that the submitted email address is valid before
  * attempting to resend the verification email. It uses Zod's email validator
  * with a custom error message for better user feedback.
@@ -34,7 +32,7 @@ const resendSchema = z.object({
 
 /**
  * Action handler for resending verification emails
- * 
+ *
  * This function processes requests to resend verification emails to users
  * during the signup process. It follows these steps:
  * 1. Extracts and validates the email from the form data
@@ -42,12 +40,12 @@ const resendSchema = z.object({
  * 3. Calls Supabase's resend API with the signup type
  * 4. Sets the redirect URL to the verification page
  * 5. Returns appropriate success or error responses
- * 
+ *
  * Security considerations:
  * - Validates email format to prevent malformed requests
  * - Uses server-side validation to prevent client-side bypass
  * - Returns generic error messages to prevent email enumeration
- * 
+ *
  * @param request - The incoming HTTP request with form data
  * @returns JSON response indicating success or error
  */
@@ -68,6 +66,7 @@ export async function action({ request }: Route.ActionArgs) {
   const { default: adminClient } = await import(
     "~/core/lib/supa-admin-client.server"
   );
+  const { getSiteUrl } = await import("~/core/lib/utils.server");
 
   const { data: linkData, error: resendError } =
     await adminClient.auth.admin.generateLink({
@@ -77,7 +76,7 @@ export async function action({ request }: Route.ActionArgs) {
       // Wait, generateLink type 'signup' is for creating a user or getting a confirmation link for an unconfirmed user.
       // If the user exists but is unconfirmed, 'signup' type works.
       options: {
-        redirectTo: `${process.env.SITE_URL}/auth/confirm`,
+        redirectTo: `${getSiteUrl()}/auth/confirm`,
       },
     });
 
@@ -95,14 +94,17 @@ export async function action({ request }: Route.ActionArgs) {
       // Fetch user name if possible, or just send without it
       // Since we don't have the user's name here easily without querying, we can omit it or query it.
       // For simplicity/performance, we'll omit it for now or query if critical.
-      
+
       await sendWelcomeEmail({
         to: validData.email,
         verificationUrl: linkData.properties.action_link,
       });
     } else {
       console.error("No action link generated");
-      return data({ error: "Failed to generate verification link" }, { status: 500 });
+      return data(
+        { error: "Failed to generate verification link" },
+        { status: 500 },
+      );
     }
   } catch (emailError) {
     console.error("Failed to send welcome email:", emailError);

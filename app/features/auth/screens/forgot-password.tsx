@@ -83,10 +83,11 @@ export async function action({ request }: Route.ActionArgs) {
   }
   // Create Supabase client
   const [client] = makeServerClient(request);
+  const { getSiteUrl } = await import("~/core/lib/utils.server");
 
   // Request password reset email from Supabase (this will use our custom SMTP)
   const { error } = await client.auth.resetPasswordForEmail(result.data.email, {
-    redirectTo: `${process.env.SITE_URL}/auth/reset-password`,
+    redirectTo: `${getSiteUrl()}/auth/reset-password`,
   });
 
   // Handle rate limiting error

@@ -1,6 +1,5 @@
 import type { Route } from "./+types/demo-work";
 
-import { AnimatePresence, motion } from "motion/react";
 import {
   AlertCircle,
   ArrowRight,
@@ -13,6 +12,7 @@ import {
   FileVideo,
   Layout,
   Lightbulb,
+  ListChecks,
   Loader2,
   LogIn,
   Menu,
@@ -21,11 +21,16 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
-import { Alert, AlertDescription, AlertTitle } from "~/core/components/ui/alert";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "~/core/components/ui/alert";
 import { Badge } from "~/core/components/ui/badge";
 import { BorderBeam } from "~/core/components/ui/border-beam";
 import { Button } from "~/core/components/ui/button";
@@ -38,11 +43,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/core/components/ui/dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-} from "~/core/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger } from "~/core/components/ui/sheet";
 import { useIsMobile } from "~/core/hooks/use-mobile";
 
 export function meta({}: Route.MetaArgs) {
@@ -241,7 +242,7 @@ export default function DemoWork({ loaderData }: Route.ComponentProps) {
   const { isDemoMode, workflows: dbWorkflows } = loaderData;
   const isMobile = useIsMobile();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  
+
   // DB 데이터를 VideoAnalysis 형식으로 변환
   const mockVideos: VideoAnalysis[] = dbWorkflows.map((workflow: any) => ({
     id: workflow.workflow_id.toString(),
@@ -249,7 +250,11 @@ export default function DemoWork({ loaderData }: Route.ComponentProps) {
     duration: formatDuration(workflow.duration_seconds),
     uploadDate: formatDate(workflow.created_at),
     status: workflow.status as "analyzed" | "analyzing" | "pending",
-    thumbnail: (workflow.thumbnail_url && workflow.thumbnail_url !== "/placeholder-video.jpg") ? workflow.thumbnail_url : null,
+    thumbnail:
+      workflow.thumbnail_url &&
+      workflow.thumbnail_url !== "/placeholder-video.jpg"
+        ? workflow.thumbnail_url
+        : null,
     steps: (workflow.steps || [])
       .sort((a: any, b: any) => a.sequence_no - b.sequence_no)
       .map((step: any) => ({
@@ -285,12 +290,13 @@ export default function DemoWork({ loaderData }: Route.ComponentProps) {
             <Bot className="size-5" />
           </div>
           <span className="text-lg font-bold text-slate-900 dark:text-slate-100">
-            Demo Workflows
+            Demo 업무 프로세스
           </span>
         </div>
         <Link to="/login">
           <Button className="w-full bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400">
-            <Plus className="mr-2 size-4" />새 분석 시작 (로그인)
+            <Plus className="mr-2 size-4" />
+            업로드 (로그인)
           </Button>
         </Link>
       </div>
@@ -325,7 +331,7 @@ export default function DemoWork({ loaderData }: Route.ComponentProps) {
                       </div>
                     </div>
                   )}
-                  <div className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[10px] text-white">
+                  <div className="absolute right-1 bottom-1 rounded bg-black/60 px-1 py-0.5 text-[10px] text-white">
                     {video.duration}
                   </div>
                 </div>
@@ -412,8 +418,8 @@ export default function DemoWork({ loaderData }: Route.ComponentProps) {
                     </AlertTitle>
                     <AlertDescription className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-blue-800 dark:text-blue-200">
-                        실제로 동영상을 업로드하고 AI 분석을 받으려면 로그인하세요.
-                        무료로 시작할 수 있습니다!
+                        실제로 동영상을 업로드하고 AI 분석을 받으려면
+                        로그인하세요. 무료로 시작할 수 있습니다!
                       </p>
                       <div className="flex gap-2">
                         <Link to="/login">
@@ -498,8 +504,9 @@ export default function DemoWork({ loaderData }: Route.ComponentProps) {
                   {/* Steps List */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between px-2">
-                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                        Process Steps
+                      <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        <ListChecks className="size-5 text-indigo-600 dark:text-indigo-400" />
+                        추출된 업무 로직
                       </h3>
                     </div>
 

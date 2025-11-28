@@ -50,6 +50,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
   // Create Supabase client and get response headers for auth cookies
   const [client, headers] = makeServerClient(request);
+  const { getSiteUrl } = await import("~/core/lib/utils.server");
 
   // Initialize OAuth flow with the specified provider
   const { data: signInData, error: signInError } =
@@ -57,7 +58,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
       provider: parsedParams.provider,
       options: {
         // Set the callback URL for when authentication is complete
-        redirectTo: `${process.env.SITE_URL}/auth/social/complete/${parsedParams.provider}`,
+        redirectTo: `${getSiteUrl()}/auth/social/complete/${parsedParams.provider}`,
       },
     });
 

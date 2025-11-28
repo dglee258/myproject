@@ -15,9 +15,11 @@
  */
 import type { Route } from "./+types/confirm";
 
-import { data, redirect } from "react-router";
+import { useEffect, useState } from "react";
+import { data, redirect, useNavigate } from "react-router";
 import { z } from "zod";
 
+import { supabaseBrowser } from "~/core/lib/supa-client.client";
 import makeServerClient from "~/core/lib/supa-client.server";
 
 /**
@@ -108,6 +110,38 @@ export async function loader({ request }: Route.LoaderArgs) {
  * @param loaderData - Data from the loader containing any error messages
  */
 export default function Confirm({ loaderData }: Route.ComponentProps) {
+  const navigate = useNavigate();
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  useEffect(() => {
+    // Check if we have a hash with access_token (Implicit Flow)
+    if (window.location.hash && window.location.hash.includes("access_token")) {
+      setIsVerifying(true);
+
+      // The Supabase client automatically parses the hash and sets the session
+      // We just need to wait for it and then redirect
+      supabaseBrowser.auth.onAuthStateChange((event, session) => {
+        if (session) {
+          // Get 'next' from search params
+          const params = new URLSearchParams(window.location.search);
+          const next = params.get("next") || "/";
+          navigate(next);
+        }
+      });
+    }
+  }, [navigate]);
+
+  if (isVerifying) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2.5">
+        <h1 className="text-2xl font-semibold">Verifying...</h1>
+        <p className="text-muted-foreground">
+          Please wait while we verify your email.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center justify-center gap-2.5">
       {/* Display error heading */}
