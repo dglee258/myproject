@@ -28,7 +28,6 @@ import {
 } from "~/core/components/ui/card";
 import { Input } from "~/core/components/ui/input";
 import { Label } from "~/core/components/ui/label";
-import makeServerClient from "~/core/lib/supa-client.server";
 
 /**
  * Meta function for the forgot password page
@@ -81,28 +80,58 @@ export async function action({ request }: Route.ActionArgs) {
       { status: 400 },
     );
   }
-  // Create Supabase client
-  const [client] = makeServerClient(request);
+
+  // Generate password reset link using admin client
+  const { default: adminClient } = await import(
+    "~/core/lib/supa-admin-client.server"
+  );
   const { getSiteUrl } = await import("~/core/lib/utils.server");
 
-  // Request password reset email from Supabase (this will use our custom SMTP)
-  const { error } = await client.auth.resetPasswordForEmail(result.data.email, {
-    redirectTo: `${getSiteUrl()}/auth/reset-password`,
-  });
-
-  // Handle rate limiting error
-  if (error?.status === 429) {
-    return data(
-      {
-        error:
-          "요청이 너무 많습니다. 잠시 후 다시 시도해주세요. (잠시 기다려주시면 자동으로 해제됩니다)",
+  const { data: linkData, error: resetError } =
+    await adminClient.auth.admin.generateLink({
+      type: "recovery",
+      email: result.data.email,
+      options: {
+        redirectTo: `${getSiteUrl()}/auth/forgot-password/create`,
       },
-      { status: 429 },
-    );
+    });
+
+  // Handle rate limiting error or other errors
+  if (resetError) {
+    if (resetError.status === 429) {
+      return data(
+        {
+          error:
+            "요청이 너무 많습니다. 잠시 후 다시 시도해주세요. (잠시 기다려주시면 자동으로 해제됩니다)",
+        },
+        { status: 429 },
+      );
+    }
+    // For security, we might want to hide other errors, but for now let's log them
+    console.error("Reset password error:", resetError);
+    // Return success to prevent enumeration even on error?
+    // Usually we want to be vague, but if it's a system error we might want to know.
+    // Let's stick to the pattern: return success unless it's a rate limit.
+  }
+
+  // Send password reset email with the generated link
+  if (linkData?.properties?.action_link) {
+    try {
+      const { sendPasswordResetEmail } = await import(
+        "~/features/email/services/email.service"
+      );
+
+      await sendPasswordResetEmail({
+        to: result.data.email,
+        resetUrl: linkData.properties.action_link,
+      });
+    } catch (emailError) {
+      console.error("Failed to send password reset email:", emailError);
+      // We still return success to the user to prevent enumeration
+    }
   }
 
   // Always return success to prevent user enumeration attacks
-  // Even if there's an error, we don't want to reveal if the email exists or not
   return { success: true };
 }
 

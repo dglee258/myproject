@@ -1,6 +1,7 @@
 import { render } from "@react-email/render";
 import { Resend } from "resend";
 
+import ResetPasswordEmail from "~/transactional-emails/emails/reset-password";
 import WelcomeEmail from "~/transactional-emails/emails/welcome";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -40,6 +41,44 @@ export async function sendWelcomeEmail({
     return { success: true, data };
   } catch (error) {
     console.error("Welcome email service error:", error);
+    throw error;
+  }
+}
+
+interface SendPasswordResetEmailParams {
+  to: string;
+  userName?: string;
+  resetUrl?: string;
+}
+
+export async function sendPasswordResetEmail({
+  to,
+  userName,
+  resetUrl,
+}: SendPasswordResetEmailParams) {
+  try {
+    // Generate email HTML using React Email
+    const emailHtml = await render(
+      <ResetPasswordEmail userName={userName} resetUrl={resetUrl} />,
+    );
+
+    const { data, error } = await resend.emails.send({
+      from: "Synchro <support@mail.synchro.it.com>",
+      to: [to],
+      subject: "비밀번호 재설정 요청",
+      html: emailHtml,
+      replyTo: "support@mail.synchro.it.com",
+    });
+
+    if (error) {
+      console.error("Email send error:", error);
+      throw new Error(`Failed to send password reset email: ${error.message}`);
+    }
+
+    console.log("Password reset email sent successfully:", data);
+    return { success: true, data };
+  } catch (error) {
+    console.error("Password reset email service error:", error);
     throw error;
   }
 }
