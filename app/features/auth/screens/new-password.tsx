@@ -30,7 +30,6 @@ import {
 import { Input } from "~/core/components/ui/input";
 import { Label } from "~/core/components/ui/label";
 import { supabaseBrowser } from "~/core/lib/supa-client.client";
-import makeServerClient from "~/core/lib/supa-client.server";
 
 /**
  * Meta function for the new password page
