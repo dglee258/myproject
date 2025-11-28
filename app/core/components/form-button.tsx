@@ -17,10 +17,10 @@ import { Button } from "./ui/button";
 
 /**
  * FormButton component for form submissions with loading state
- * 
+ *
  * This component enhances the base Button component with form submission awareness,
  * automatically showing a loading spinner and disabling the button during submission.
- * 
+ *
  * @param label - The text to display on the button when not submitting
  * @param className - Optional CSS classes to apply to the button
  * @param props - Additional button props passed to the underlying Button component
@@ -29,14 +29,20 @@ import { Button } from "./ui/button";
 export default function FormButton({
   label,
   className,
+  isLoading,
   ...props
-}: { label: string; className?: string } & React.ComponentProps<"button">) {
+}: {
+  label: string;
+  className?: string;
+  isLoading?: boolean;
+} & React.ComponentProps<"button">) {
   // Get the current navigation state from React Router
   const navigation = useNavigation();
-  
+
   // Determine if a form is currently being submitted
-  const submitting = navigation.state === "submitting";
-  
+  // Use explicit isLoading prop if provided, otherwise check navigation state
+  const submitting = isLoading || navigation.state === "submitting";
+
   return (
     <Button
       className={cn(className)}

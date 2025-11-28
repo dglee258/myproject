@@ -3,7 +3,7 @@
  *
  * This component handles the second step of the password reset flow:
  * allowing users to create a new password after clicking a reset link.
- * 
+ *
  * The component includes:
  * - Password and confirmation input fields with validation
  * - Form submission handling
@@ -13,7 +13,7 @@
 import type { Route } from "./+types/new-password";
 
 import { CheckCircle2Icon } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { redirect } from "react-router";
 import { Form, data, useLoaderData } from "react-router";
 import { z } from "zod";
@@ -29,6 +29,7 @@ import {
 } from "~/core/components/ui/card";
 import { Input } from "~/core/components/ui/input";
 import { Label } from "~/core/components/ui/label";
+import { supabaseBrowser } from "~/core/lib/supa-client.client";
 import makeServerClient from "~/core/lib/supa-client.server";
 
 /**
@@ -77,46 +78,9 @@ const updatePasswordSchema = z
  * @param request - The form submission request
  * @returns Validation errors, auth errors, or success confirmation
  */
+// Server action removed as we are using client-side submission
 export async function action({ request }: Route.ActionArgs) {
-  // Create Supabase client and get the current user
-  const [client] = makeServerClient(request);
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  
-  // Redirect to forgot password page if user is not authenticated
-  // This prevents direct access to this page without a valid reset link
-  if (!user) {
-    return redirect("/auth/forgot-password");
-  }
-  
-  // Parse and validate form data
-  const formData = await request.formData();
-  const {
-    success,
-    data: validData,
-    error,
-  } = updatePasswordSchema.safeParse(Object.fromEntries(formData));
-  
-  // Return validation errors if passwords are invalid
-  if (!success) {
-    return data({ fieldErrors: error.flatten().fieldErrors }, { status: 400 });
-  }
-  
-  // Update the user's password with Supabase
-  const { error: updateError } = await client.auth.updateUser({
-    password: validData.password,
-  });
-  
-  // Return error if password update fails
-  if (updateError) {
-    return data({ error: updateError.message }, { status: 400 });
-  }
-  
-  // Return success response
-  return {
-    success: true,
-  };
+  return {};
 }
 
 /**
@@ -133,20 +97,50 @@ export async function action({ request }: Route.ActionArgs) {
  * @param actionData - Data returned from the form action, including errors or success status
  */
 export default function ChangePassword({ actionData }: Route.ComponentProps) {
-  // Reference to the form element for resetting after successful submission
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
-  
-  // Reset and blur the form when the password is successfully updated
-  useEffect(() => {
-    if (actionData && "success" in actionData && actionData.success) {
-      formRef.current?.reset();
-      formRef.current?.blur();
-      // Blur all input fields for better UX and security
-      formRef.current?.querySelectorAll("input")?.forEach((input) => {
-        input.blur();
-      });
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setSuccess(false);
+    setIsLoading(true);
+
+    const formData = new FormData(event.currentTarget);
+    const data = Object.fromEntries(formData);
+
+    const result = updatePasswordSchema.safeParse(data);
+
+    if (!result.success) {
+      const firstError = result.error.flatten().fieldErrors;
+      // Just show the first error for simplicity or handle field errors better
+      const errorMessage = Object.values(firstError).flat()[0];
+      setError(errorMessage || "Invalid input");
+      setIsLoading(false);
+      return;
     }
-  }, [actionData]);
+
+    try {
+      const { error: updateError } = await supabaseBrowser.auth.updateUser({
+        password: result.data.password,
+      });
+
+      if (updateError) {
+        setError(updateError.message);
+      } else {
+        setSuccess(true);
+        formRef.current?.reset();
+      }
+    } catch (err) {
+      setError("An unexpected error occurred");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex h-screen items-center justify-center">
       <Card className="w-full max-w-md">
@@ -159,9 +153,9 @@ export default function ChangePassword({ actionData }: Route.ComponentProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <Form
+          <form
             className="flex w-full flex-col gap-4"
-            method="post"
+            onSubmit={handleSubmit}
             ref={formRef}
           >
             <div className="flex flex-col items-start space-y-2">
@@ -175,11 +169,6 @@ export default function ChangePassword({ actionData }: Route.ComponentProps) {
                 type="password"
                 placeholder="Enter your new password"
               />
-              {actionData &&
-              "fieldErrors" in actionData &&
-              actionData.fieldErrors.password ? (
-                <FormErrors errors={actionData.fieldErrors.password} />
-              ) : null}
             </div>
             <div className="flex flex-col items-start space-y-2">
               <Label htmlFor="name" className="flex flex-col items-start gap-1">
@@ -192,23 +181,16 @@ export default function ChangePassword({ actionData }: Route.ComponentProps) {
                 type="password"
                 placeholder="Confirm your new password"
               />
-              {actionData &&
-              "fieldErrors" in actionData &&
-              actionData.fieldErrors.confirmPassword ? (
-                <FormErrors errors={actionData.fieldErrors.confirmPassword} />
-              ) : null}
             </div>
-            <FormButton label="Update password" />
-            {actionData && "error" in actionData && actionData.error ? (
-              <FormErrors errors={[actionData.error]} />
-            ) : null}
-            {actionData && "success" in actionData && actionData.success ? (
+            <FormButton label="Update password" isLoading={isLoading} />
+            {error ? <FormErrors errors={[error]} /> : null}
+            {success ? (
               <div className="flex items-center justify-center gap-2 text-sm text-green-500">
                 <CheckCircle2Icon className="size-4" />
                 <p>Password updated successfully.</p>
               </div>
             ) : null}
-          </Form>
+          </form>
         </CardContent>
       </Card>
     </div>

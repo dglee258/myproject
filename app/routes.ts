@@ -166,12 +166,14 @@ export default [
         ]),
       ]),
     ]),
+
+    route(
+      "/auth/forgot-password/create",
+      "features/auth/screens/new-password.tsx",
+    ),
+
     layout("core/layouts/private.layout.tsx", { id: "private-auth" }, [
       ...prefix("/auth", [
-        route(
-          "/forgot-password/create",
-          "features/auth/screens/new-password.tsx",
-        ),
         route("/email-verified", "features/auth/screens/email-verified.tsx"),
       ]),
       // Routes that should only be visible to authenticated users.
