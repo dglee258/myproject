@@ -77,12 +77,18 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   // Submit email change request to Supabase Auth API
-  const { error } = await client.auth.updateUser({
-    email: validData.email,
-    data: {
-      language: "ko", // Set language to Korean for email templates
+  const { getSiteUrl } = await import("~/core/lib/utils.server");
+  const { error } = await client.auth.updateUser(
+    {
+      email: validData.email,
+      data: {
+        language: "ko", // Set language to Korean for email templates
+      },
     },
-  });
+    {
+      emailRedirectTo: `${getSiteUrl()}/email-verified`,
+    },
+  );
 
   // Handle API errors
   if (error) {
