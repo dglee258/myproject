@@ -94,7 +94,7 @@ export default function SidebarUser({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <Link to="/account/edit" viewTransition>
+                <Link to="/profile/edit" viewTransition>
                   <UserCircle2Icon />
                   Account
                 </Link>

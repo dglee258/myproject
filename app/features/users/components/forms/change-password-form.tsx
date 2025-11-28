@@ -40,7 +40,7 @@ export default function ChangePasswordForm({
       className="w-full max-w-screen-md"
       action="/api/users/password"
     >
-      <Card className="justify-between">
+      <Card className="overflow-hidden rounded-2xl border border-white/20 bg-white/40 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/40">
         <CardHeader>
           <CardTitle>
             {hasPassword ? "비밀번호 변경" : "비밀번호 설정"}

@@ -55,7 +55,7 @@ DATABASE_URL=your_database_url
 SUPABASE_URL=your_supabase_url
 SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-SITE_URL=http://localhost:5173
+SITE_URL=https://synchro.it.com
 ```
 
 ## 📝 스크립트

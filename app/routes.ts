@@ -126,9 +126,9 @@ export default [
   ]),
 
   // Account routes with custom layout (back button only, no navigation)
-  layout("core/layouts/account.layout.tsx", { id: "account" }, [
-    route("/account", "features/users/screens/account.tsx"),
-    route("/account/edit", "features/users/screens/account.edit.tsx"),
+  // Account routes with custom layout (back button only, no navigation)
+  layout("core/layouts/profile.layout.tsx", { id: "profile" }, [
+    route("/profile/edit", "features/users/screens/profile.edit.tsx"),
   ]),
 
   layout("core/layouts/navigation.layout.tsx", [

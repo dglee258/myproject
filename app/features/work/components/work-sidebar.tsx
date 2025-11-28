@@ -161,7 +161,7 @@ export default function WorkSidebar(
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link to="/account/edit">
+                  <Link to="/profile/edit">
                     <UserIcon className="size-4" />
                     프로필 설정
                   </Link>

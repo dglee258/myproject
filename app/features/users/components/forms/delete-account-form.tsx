@@ -17,7 +17,7 @@ import { Label } from "~/core/components/ui/label";
 export default function DeleteAccountForm() {
   const fetcher = useFetcher<Route.ComponentProps["actionData"]>();
   return (
-    <Card className="w-full max-w-screen-md bg-red-100 dark:bg-red-900/40">
+    <Card className="w-full max-w-screen-md overflow-hidden rounded-2xl border border-red-200/50 bg-red-50/50 shadow-xl backdrop-blur-xl dark:border-red-900/50 dark:bg-red-950/30">
       <CardHeader>
         <CardTitle>주의 필요</CardTitle>
       </CardHeader>

@@ -37,7 +37,7 @@ export default function ChangeEmailForm({ email }: { email: string }) {
       className="w-full max-w-screen-md"
       action="/api/users/email"
     >
-      <Card className="justify-between">
+      <Card className="overflow-hidden rounded-2xl border border-white/20 bg-white/40 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/40">
         <CardHeader>
           <CardTitle>{email ? "이메일 변경" : "이메일 추가"}</CardTitle>
           <CardDescription>

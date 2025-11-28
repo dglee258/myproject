@@ -139,7 +139,7 @@ export default function TeamInvite() {
               </AlertDescription>
             </Alert>
             <Button onClick={() => navigate("/work")} className="mt-4 w-full">
-              홈으로 돌아가기
+              홈으로 
             </Button>
           </CardContent>
         </Card>
@@ -215,7 +215,7 @@ export default function TeamInvite() {
               </AlertDescription>
             </Alert>
             <Button onClick={() => navigate("/work")} className="mt-4 w-full">
-              홈으로 돌아가기
+              홈으로
             </Button>
           </CardContent>
         </Card>

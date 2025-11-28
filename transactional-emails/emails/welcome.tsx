@@ -38,7 +38,7 @@ export default function WelcomeEmail({
           {/* Header */}
           <Section style={header}>
             <Img
-              src="https://synchro.it.com/logo.png"
+              src="https://synchro.it.com/logo.svg"
               width="120"
               height="40"
               alt="싱크로 로고"
@@ -129,7 +129,10 @@ export default function WelcomeEmail({
           <Section style={supportSection}>
             <Text style={supportText}>
               궁금한 점이 있으신가요? 언제든지{" "}
-              <Link href="mailto:support@mail.synchro.it.com" style={supportLink}>
+              <Link
+                href="mailto:support@mail.synchro.it.com"
+                style={supportLink}
+              >
                 support@mail.synchro.it.com
               </Link>
               으로 문의해주세요.

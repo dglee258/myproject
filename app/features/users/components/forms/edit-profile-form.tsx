@@ -57,7 +57,7 @@ export default function EditProfileForm({
       ref={formRef}
       action="/api/users/profile"
     >
-      <Card className="justify-between">
+      <Card className="overflow-hidden rounded-2xl border border-white/20 bg-white/40 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/40">
         <CardHeader>
           <CardTitle>프로필 편집</CardTitle>
           <CardDescription>프로필 정보를 관리하세요.</CardDescription>
@@ -71,7 +71,9 @@ export default function EditProfileForm({
               >
                 <span>프로필 사진</span>
                 <Avatar className="size-24">
-                  {avatar ? <AvatarImage src={avatar} alt="프로필 이미지" /> : null}
+                  {avatar ? (
+                    <AvatarImage src={avatar} alt="프로필 이미지" />
+                  ) : null}
                   <AvatarFallback>
                     <UserIcon className="text-muted-foreground size-10" />
                   </AvatarFallback>
@@ -114,9 +116,7 @@ export default function EditProfileForm({
                 name="marketingConsent"
                 defaultChecked={marketingConsent}
               />
-              <Label htmlFor="marketingConsent">
-                마케팅 이메일 수신 동의
-              </Label>
+              <Label htmlFor="marketingConsent">마케팅 이메일 수신 동의</Label>
             </div>
             {fetcher.data &&
             "fieldErrors" in fetcher.data &&

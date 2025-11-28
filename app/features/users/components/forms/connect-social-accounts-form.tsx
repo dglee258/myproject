@@ -33,7 +33,7 @@ export default function ConnectSocialAccountsForm({
   providers: string[];
 }) {
   return (
-    <Card className="w-full max-w-screen-md">
+    <Card className="w-full max-w-screen-md overflow-hidden rounded-2xl border border-white/20 bg-white/40 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/40">
       <CardHeader>
         <CardTitle>소셜 계정 연동</CardTitle>
         <CardDescription>
