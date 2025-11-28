@@ -78,26 +78,57 @@ export async function action({ request }: Route.ActionArgs) {
 
   // Submit email change request to Supabase Auth API
   const { getSiteUrl } = await import("~/core/lib/utils.server");
-  const { error } = await client.auth.updateUser(
-    {
-      email: validData.email,
-      data: {
-        language: "ko", // Set language to Korean for email templates
-      },
-    },
-    {
-      emailRedirectTo: `${getSiteUrl()}/email-verified`,
-    },
+  const { default: adminClient } = await import(
+    "~/core/lib/supa-admin-client.server"
   );
 
-  // Handle API errors
-  if (error) {
-    return data({ error: error.message }, { status: 400 });
+  // Get current user to get their current email (needed for generateLink?)
+  // Actually generateLink for email_change_new takes the new email in new_email option
+  // and the current email in email param.
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+
+  if (!user || !user.email) {
+    return data({ error: "사용자 정보를 찾을 수 없습니다." }, { status: 400 });
+  }
+
+  // Generate link for email change
+  const { data: linkData, error: linkError } =
+    await adminClient.auth.admin.generateLink({
+      type: "email_change_new",
+      email: user.email, // Current email
+      newEmail: validData.email, // New email
+      options: {
+        redirectTo: `${getSiteUrl()}/email-verified`,
+      },
+    });
+
+  if (linkError) {
+    return data({ error: linkError.message }, { status: 400 });
+  }
+
+  // Send confirmation email manually
+  if (linkData?.properties?.action_link) {
+    try {
+      const { sendChangeEmailEmail } = await import(
+        "~/features/email/services/email.service"
+      );
+
+      await sendChangeEmailEmail({
+        to: validData.email, // Send to new email
+        userName: user.user_metadata?.name || "사용자",
+        newEmail: validData.email,
+        confirmationUrl: linkData.properties.action_link,
+      });
+    } catch (emailError) {
+      console.error("Failed to send email change email:", emailError);
+      // We return error here because if email fails, user can't verify
+      return data({ error: "이메일 발송에 실패했습니다." }, { status: 500 });
+    }
   }
 
   // Return success response
-  // Note: At this point, the user will receive a confirmation email
-  // and must verify the new address before the change takes effect
   return {
     success: true,
   };

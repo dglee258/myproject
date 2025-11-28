@@ -83,6 +83,53 @@ export async function sendPasswordResetEmail({
   }
 }
 
+interface SendChangeEmailEmailParams {
+  to: string;
+  userName?: string;
+  newEmail: string;
+  confirmationUrl: string;
+}
+
+export async function sendChangeEmailEmail({
+  to,
+  userName,
+  newEmail,
+  confirmationUrl,
+}: SendChangeEmailEmailParams) {
+  try {
+    const { default: ChangeEmail } = await import(
+      "~/transactional-emails/emails/change-email"
+    );
+    // Generate email HTML using React Email
+    const emailHtml = await render(
+      <ChangeEmail
+        userName={userName}
+        newEmail={newEmail}
+        confirmationUrl={confirmationUrl}
+      />,
+    );
+
+    const { data, error } = await resend.emails.send({
+      from: "Synchro <support@mail.synchro.it.com>",
+      to: [to],
+      subject: "이메일 변경 확인",
+      html: emailHtml,
+      replyTo: "support@mail.synchro.it.com",
+    });
+
+    if (error) {
+      console.error("Email send error:", error);
+      throw new Error(`Failed to send change email email: ${error.message}`);
+    }
+
+    console.log("Change email email sent successfully:", data);
+    return { success: true, data };
+  } catch (error) {
+    console.error("Change email email service error:", error);
+    throw error;
+  }
+}
+
 interface EmailTemplate {
   subject: string;
   html: string;
