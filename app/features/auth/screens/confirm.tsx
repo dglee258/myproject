@@ -42,66 +42,57 @@ export const meta: Route.MetaFunction = () => {
  * - next: The URL to redirect to after successful confirmation (defaults to home page)
  */
 const searchParamsSchema = z.object({
-  token_hash: z.string(),
-  type: z.enum(["email", "recovery", "email_change", "signup"]),
+  token_hash: z.string().optional(),
+  type: z.enum(["email", "recovery", "email_change", "signup"]).optional(),
+  code: z.string().optional(),
   next: z.string().default("/"),
 });
 
-/**
- * Loader function for the confirmation page
- *
- * This function processes the verification token and completes the respective action:
- * 1. Validates the token hash, type, and next URL from query parameters
- * 2. Verifies the token with Supabase authentication
- * 3. For email change confirmations, redirects with a success message
- * 4. For other confirmations, redirects to the specified next URL
- *
- * The function handles three types of confirmations:
- * - email: Email verification for new accounts
- * - recovery: Password recovery confirmation
- * - email_change: Email change confirmation
- *
- * @param request - The incoming request with confirmation parameters
- * @returns Redirect to next URL with auth cookies or error response
- */
 export async function loader({ request }: Route.LoaderArgs) {
-  // Extract query parameters from the URL
   const { searchParams } = new URL(request.url);
 
-  // Validate the confirmation parameters
   const { success, data: validData } = searchParamsSchema.safeParse(
     Object.fromEntries(searchParams),
   );
 
-  // Return error if parameters are invalid
   if (!success) {
     return data({ error: "Invalid confirmation code" }, { status: 400 });
   }
 
-  // Create Supabase client and get response headers for auth cookies
   const [client, headers] = makeServerClient(request);
 
-  // Verify the token with Supabase
-  const { error, data: verifyOtpData } = await client.auth.verifyOtp({
-    ...validData,
-  });
-
-  // Return error if verification fails
-  if (error) {
-    return data({ error: error.message }, { status: 400 });
+  // Handle PKCE code exchange
+  if (validData.code) {
+    const { error } = await client.auth.exchangeCodeForSession(validData.code);
+    if (error) {
+      return data({ error: error.message }, { status: 400 });
+    }
+    return redirect(validData.next, { headers });
   }
 
-  // Special handling for email change confirmations
-  if (validData.type === "email_change") {
-    return redirect(
-      // @ts-ignore - Supabase returns a message in the user object for email changes
-      `${validData.next}?message=${encodeURIComponent(verifyOtpData.user.msg ?? "Your email has been updated")}`,
-      { headers },
-    );
+  // Handle Token Hash (OTP) verification
+  if (validData.token_hash && validData.type) {
+    const { error, data: verifyOtpData } = await client.auth.verifyOtp({
+      token_hash: validData.token_hash,
+      type: validData.type,
+    });
+
+    if (error) {
+      return data({ error: error.message }, { status: 400 });
+    }
+
+    if (validData.type === "email_change") {
+      return redirect(
+        // @ts-ignore
+        `${validData.next}?message=${encodeURIComponent(verifyOtpData.user.msg ?? "Your email has been updated")}`,
+        { headers },
+      );
+    }
+
+    return redirect(validData.next, { headers });
   }
 
-  // Redirect to the next URL with auth cookies in headers
-  return redirect(validData.next, { headers });
+  return data({ error: "Invalid confirmation link" }, { status: 400 });
 }
 
 /**
