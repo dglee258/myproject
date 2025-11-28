@@ -144,7 +144,7 @@ export async function action({ request }: Route.ActionArgs) {
           avatar_url: validData.avatarUrl,
           marketing_consent: validData.marketing,
         },
-        redirectTo: `${process.env.SITE_URL}/auth/confirm`,
+        redirectTo: `${process.env.SITE_URL}/auth/confirm?next=${encodeURIComponent("/login?message=email_verified")}`,
       },
     });
 

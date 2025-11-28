@@ -194,6 +194,19 @@ export default function Login({
               </AlertDescription>
             </Alert>
           )}
+          {/* Success message for email verification */}
+          {loaderData?.message === "email_verified" && (
+            <Alert className="bg-green-600/20 text-green-700 dark:bg-green-950/20 dark:text-green-600">
+              <CheckCircle2Icon
+                className="size-4"
+                color="oklch(0.627 0.194 149.214)"
+              />
+              <AlertTitle>이메일 인증 완료!</AlertTitle>
+              <AlertDescription className="text-green-700 dark:text-green-600">
+                이메일 인증이 성공적으로 완료되었습니다. 이제 로그인해주세요.
+              </AlertDescription>
+            </Alert>
+          )}
           <Form
             className="flex w-full flex-col gap-5"
             method="post"
