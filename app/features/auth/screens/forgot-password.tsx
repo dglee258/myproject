@@ -163,10 +163,10 @@ export default function ForgotPassword({ actionData }: Route.ComponentProps) {
       <Card className="w-full max-w-md">
         <CardHeader className="flex flex-col items-center">
           <CardTitle className="text-2xl font-semibold">
-            Forgot your password?
+            비밀번호 찾기
           </CardTitle>
           <CardDescription className="text-center text-base">
-            Enter your email and we&apos;ll send you a reset link.
+            가입한 이메일을 입력하시면 비밀번호 재설정 링크를 보내드립니다.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -177,14 +177,14 @@ export default function ForgotPassword({ actionData }: Route.ComponentProps) {
           >
             <div className="flex flex-col items-start space-y-2">
               <Label htmlFor="name" className="flex flex-col items-start gap-1">
-                Email
+                이메일 (Email)
               </Label>
               <Input
                 id="email"
                 name="email"
                 required
                 type="email"
-                placeholder="test@test.com"
+                placeholder="name@example.com"
               />
               {actionData &&
               "fieldErrors" in actionData &&
@@ -192,14 +192,14 @@ export default function ForgotPassword({ actionData }: Route.ComponentProps) {
                 <FormErrors errors={actionData.fieldErrors.email} />
               ) : null}
             </div>
-            <FormButton label="Send reset link" className="w-full" />
+            <FormButton label="재설정 링크 보내기" className="w-full" />
             {actionData && "error" in actionData && actionData.error ? (
               <FormErrors errors={[actionData.error]} />
             ) : null}
             {actionData &&
             "success" in actionData &&
             actionData.success === true ? (
-              <FormSuccess message="Check your email for a reset link, you can close this tab." />
+              <FormSuccess message="이메일로 재설정 링크가 발송되었습니다. 메일함을 확인해주세요." />
             ) : null}
           </Form>
         </CardContent>

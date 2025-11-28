@@ -14,7 +14,7 @@ import type { Route } from "./+types/new-password";
 
 import { CheckCircle2Icon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { redirect } from "react-router";
+import { redirect, useNavigate } from "react-router";
 import { Form, data, useLoaderData } from "react-router";
 import { z } from "zod";
 
@@ -96,6 +96,7 @@ export async function action({ request }: Route.ActionArgs) {
  * @param actionData - Data returned from the form action, including errors or success status
  */
 export default function ChangePassword({ actionData }: Route.ComponentProps) {
+  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -131,6 +132,10 @@ export default function ChangePassword({ actionData }: Route.ComponentProps) {
       } else {
         setSuccess(true);
         formRef.current?.reset();
+        // Redirect to login page after 2 seconds
+        setTimeout(() => {
+          navigate("/login");
+        }, 2000);
       }
     } catch (err) {
       setError("An unexpected error occurred");
@@ -145,10 +150,10 @@ export default function ChangePassword({ actionData }: Route.ComponentProps) {
       <Card className="w-full max-w-md">
         <CardHeader className="flex flex-col items-center">
           <CardTitle className="text-2xl font-semibold">
-            Update your password
+            비밀번호 변경
           </CardTitle>
           <CardDescription className="text-center text-base">
-            Enter your new password and confirm it.
+            새로운 비밀번호를 입력해주세요.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -159,34 +164,34 @@ export default function ChangePassword({ actionData }: Route.ComponentProps) {
           >
             <div className="flex flex-col items-start space-y-2">
               <Label htmlFor="name" className="flex flex-col items-start gap-1">
-                Password
+                새 비밀번호 (New Password)
               </Label>
               <Input
                 id="password"
                 name="password"
                 required
                 type="password"
-                placeholder="Enter your new password"
+                placeholder="새 비밀번호 입력"
               />
             </div>
             <div className="flex flex-col items-start space-y-2">
               <Label htmlFor="name" className="flex flex-col items-start gap-1">
-                Confirm password
+                비밀번호 확인 (Confirm Password)
               </Label>
               <Input
                 id="confirmPassword"
                 name="confirmPassword"
                 required
                 type="password"
-                placeholder="Confirm your new password"
+                placeholder="비밀번호 재입력"
               />
             </div>
-            <FormButton label="Update password" isLoading={isLoading} />
+            <FormButton label="비밀번호 변경하기" isLoading={isLoading} />
             {error ? <FormErrors errors={[error]} /> : null}
             {success ? (
               <div className="flex items-center justify-center gap-2 text-sm text-green-500">
                 <CheckCircle2Icon className="size-4" />
-                <p>Password updated successfully.</p>
+                <p>비밀번호가 성공적으로 변경되었습니다.</p>
               </div>
             ) : null}
           </form>
