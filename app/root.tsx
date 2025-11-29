@@ -46,8 +46,16 @@ import { Sheet } from "./core/components/ui/sheet";
 import { cn } from "./core/lib/utils";
 import NotFound from "./core/screens/404";
 
+export const meta: Route.MetaFunction = () => [
+  { title: "Synchro - AI 업무프로세스" },
+  {
+    name: "description",
+    content: "AI가 분석하는 업무 프로세스 자동화",
+  },
+];
+
 export const links: Route.LinksFunction = () => [
-  { rel: "icon", href: "/favicon.ico" },
+  { rel: "icon", href: "/icon.svg" },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",
